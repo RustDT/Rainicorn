@@ -1,0 +1,12 @@
+[package]
+name = "rust_parse_describe"
+version = "0.0.1"
+
+[dependencies]
+syntex_syntax = "*"
+
+[[bin]]
+name = "rust_parse_describe"
+
+[lib]
+path = "src/lib.rs"
