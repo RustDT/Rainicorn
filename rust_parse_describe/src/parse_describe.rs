@@ -1,3 +1,6 @@
+use ::core_util::*;
+use ::common::*;
+
 use ::syntex_syntax::syntax::ast::*;
 use ::syntex_syntax::parse::{ ParseSess };
 use ::syntex_syntax::parse;
@@ -8,12 +11,26 @@ use ::syntex_syntax::diagnostic:: { SpanHandler, Handler, RenderSpan, Level};
 use ::syntex_syntax::diagnostic;
 
 use ::std::io;
+//use ::syntex_syntax::parse::ParseSess;
 
-use ::common::*;
 
 /* -----------------  ----------------- */
 
-use std::fmt;
+
+pub fn parse_analisys(source : &str) {
+	
+	let myEmitter = MessagesHandler::new(io::stdout());
+	let handler = Handler::with_emitter(true, Box::new(myEmitter));
+	let spanhandler = SpanHandler::new(handler, CodeMap::new());
+	let sess = ParseSess::with_span_handler(spanhandler);
+	
+	let cfg = vec![];
+
+	let mut parser = parse::new_parser_from_source_str(&sess, cfg, "name".to_string(), source.to_string());
+	
+	println!("RUST_PARSE_DESCRIBE 0.1");
+	parse_analisys_do(&sess, &mut parser);
+}
 
 struct MessagesHandler {
 	out : Box<io::Stdout>,
@@ -21,7 +38,7 @@ struct MessagesHandler {
 
 
 use std::io::prelude::{ Write };
-use std::boxed::*;
+use std::boxed::Box;
 
 use ::token_writer;
 
@@ -33,7 +50,7 @@ impl MessagesHandler {
 	}
 	
     fn output(&mut self, cmsp: Option<(&codemap::CodeMap, Span)>, msg: &str, _: Option<&str>, lvl: Level) 
-    	-> Result<(), io::Error>
+    	-> Void
 	{
     	let sourcerange = match cmsp {
     		Some((codemap, span)) => Some(SourceRange::new(codemap, span)),
@@ -55,9 +72,9 @@ impl MessagesHandler {
 }
 
 trait OutputString {
-	fn outputString(&self, out : &mut io::Write) -> io::Result<()>;
+	fn outputString(&self, out : &mut io::Write) -> Void;
 	
-	fn outputStringAnd(&self, out : &mut io::Write, suffix: &str) -> io::Result<()> {
+	fn outputStringAnd(&self, out : &mut io::Write, suffix: &str) -> Void {
 		try!(self.outputString(out));
 		try!(out.write_all(suffix.as_bytes()));
 		Ok(())
@@ -65,7 +82,7 @@ trait OutputString {
 }
 
 impl OutputString for Level {
-	fn outputString(&self, out : &mut io::Write) -> io::Result<()> {
+	fn outputString(&self, out : &mut io::Write) -> Void {
 		let str = match *self {
 	        Level::Bug => panic!("Bug parsing error code"),
 	        Level::Fatal => "error",
@@ -82,7 +99,7 @@ impl OutputString for Level {
 }
 
 impl OutputString for SourceRange {
-	fn outputString(&self, out : &mut io::Write) -> io::Result<()> {
+	fn outputString(&self, out : &mut io::Write) -> Void {
 		
 		try!(out.write_fmt(format_args!("{{ {} {} {} {} }}", 
 			self.start_pos.line, self.start_pos.col.0,
@@ -94,7 +111,7 @@ impl OutputString for SourceRange {
 }
 
 impl OutputString for Option<SourceRange> {
-	fn outputString(&self, out : &mut io::Write) -> io::Result<()> {
+	fn outputString(&self, out : &mut io::Write) -> Void {
 		
 		match self {
    			&None => try!(out.write_fmt(format_args!("{{ }}"))) ,
@@ -123,19 +140,8 @@ impl diagnostic::Emitter for MessagesHandler {
 }
 
 
-pub fn parse_analisys(source : &str) {
-	
-	let myEmitter = MessagesHandler::new(io::stdout());
-	let handler = Handler::with_emitter(true, Box::new(myEmitter));
-	let spanhandler = SpanHandler::new(handler, CodeMap::new());
-	let sess = ParseSess::with_span_handler(spanhandler);
-	
-	let cfg = vec![];
+pub fn parse_analisys_do(sess : &ParseSess, parser : &mut parse::parser::Parser) {
 
-	let mut parser = parse::new_parser_from_source_str(&sess, cfg, "name".to_string(), source.to_string());
-	
-	println!("RUST_PARSE_DESCRIBE 0.1");
-	
 	let krate_result : parse::PResult<Crate> = parser.parse_crate_mod();
 	
 	io::stdout().flush();
@@ -152,6 +158,7 @@ pub fn parse_analisys(source : &str) {
 	
 //	visitor.walk_crate(&krate);
 	visit::walk_crate(&mut visitor, &krate);
+	
 }
 
 struct StructureVisitor<'ps> {
