@@ -1,5 +1,5 @@
 use ::core_util::*;
-use ::common::*;
+use ::ranges::*;
 
 use ::syntex_syntax::syntax::ast::*;
 use ::syntex_syntax::parse::{ ParseSess };
@@ -36,12 +36,61 @@ struct MessagesHandler {
 	out : Box<io::Stdout>,
 }
 
-
 use std::io::prelude::{ Write };
 use std::boxed::Box;
 
 use ::token_writer;
 
+use std::fmt;
+
+
+struct StdoutWrite<'l>(&'l mut io::Stdout);
+
+impl<'l> fmt::Write for StdoutWrite<'l> {
+	
+	fn write_str(&mut self, s: &str) -> fmt::Result {
+		match self.0.write_all(s.as_bytes()) {
+			Ok(_) => Ok(()),
+			Err(_) => Err(fmt::Error),
+		}
+	}
+	
+}
+
+
+impl<'l> CharOutput<fmt::Error> for StdoutWrite<'l> {
+	
+    fn write_str(&mut self, string: &str) -> fmt::Result {
+    	fmt::Write::write_str(self, string)
+    }
+	
+    fn write_char(&mut self, c: char) -> fmt::Result {
+    	fmt::Write::write_char(self, c)
+    }
+	
+}
+
+
+unsafe impl ::std::marker::Send for MessagesHandler { } // FIXME: need to review this
+
+impl diagnostic::Emitter for MessagesHandler {
+	
+    fn emit(&mut self, cmsp: Option<(&codemap::CodeMap, Span)>, msg: &str, code: Option<&str>, lvl: Level) {
+    	
+    	match self.outputMessage(cmsp, msg, code, lvl) {
+    		Ok(_) => {}
+    		Err(err) => {
+    			io::stderr().write_fmt(format_args!("Error serializing compiler message: {}\n", err)).unwrap();
+			}
+    	}
+    	
+    }
+    
+    fn custom_emit(&mut self, _: &codemap::CodeMap, _: RenderSpan, _: &str, _: Level) {
+    	panic!("custom_emit called!");
+    }
+	
+}
 
 impl MessagesHandler {
 	
@@ -49,7 +98,7 @@ impl MessagesHandler {
 		 MessagesHandler{ out : Box::new(writer), }
 	}
 	
-    fn output(&mut self, cmsp: Option<(&codemap::CodeMap, Span)>, msg: &str, _: Option<&str>, lvl: Level) 
+    fn outputMessage(&mut self, cmsp: Option<(&codemap::CodeMap, Span)>, msg: &str, _: Option<&str>, lvl: Level) 
     	-> Void
 	{
     	let sourcerange = match cmsp {
@@ -59,11 +108,14 @@ impl MessagesHandler {
 		
     	try!(self.out.write_fmt(format_args!("MESSAGE {{")));
     	
-        try!(lvl.outputStringAnd(&mut self.out, " "));
+        try!(outputString_Level(&lvl, &mut StdoutWrite(&mut self.out)));
+        try!(self.out.write_all(" ".as_bytes()));
         
-        try!(sourcerange.outputStringAnd(&mut self.out, " "));
         
-        try!(token_writer::toStringToken(msg, &mut self.out));
+        try!(outputString_optSourceRange(&sourcerange, &mut StdoutWrite(&mut self.out)));
+        try!(self.out.write_all(" ".as_bytes()));
+        
+        try!(token_writer::writeStringToken(msg, &mut StdoutWrite(&mut self.out)));
         
     	try!(self.out.write_fmt(format_args!("}}\n")));
     	
@@ -71,19 +123,8 @@ impl MessagesHandler {
     }
 }
 
-trait OutputString {
-	fn outputString(&self, out : &mut io::Write) -> Void;
-	
-	fn outputStringAnd(&self, out : &mut io::Write, suffix: &str) -> Void {
-		try!(self.outputString(out));
-		try!(out.write_all(suffix.as_bytes()));
-		Ok(())
-	}
-}
-
-impl OutputString for Level {
-	fn outputString(&self, out : &mut io::Write) -> Void {
-		let str = match *self {
+	fn outputString_Level(lvl : &Level, out : &mut StdoutWrite) -> Void {
+		let str = match *lvl {
 	        Level::Bug => panic!("Bug parsing error code"),
 	        Level::Fatal => "error",
 	        Level::Error => "error",
@@ -92,63 +133,43 @@ impl OutputString for Level {
 	        Level::Help => "help",
 	    };
 		
-		try!(out.write_fmt(format_args!("{}", str)));
+		try!(out.0.write_fmt(format_args!("{}", str)));
 		
 		Ok(())
 	}	
-}
 
-impl OutputString for SourceRange {
-	fn outputString(&self, out : &mut io::Write) -> Void {
+	fn outputString_SourceRange(sr : &SourceRange, out : &mut StdoutWrite) -> Void {
 		
-		try!(out.write_fmt(format_args!("{{ {} {} {} {} }}", 
-			self.start_pos.line, self.start_pos.col.0,
-			self.end_pos.line, self.start_pos.col.0,
+		try!(out.0.write_fmt(format_args!("{{ {} {} {} {} }}", 
+			sr.start_pos.line, sr.start_pos.col.0,
+			sr.end_pos.line, sr.start_pos.col.0,
 		)));
 		
 		Ok(())
 	}
-}
 
-impl OutputString for Option<SourceRange> {
-	fn outputString(&self, out : &mut io::Write) -> Void {
+	fn outputString_optSourceRange(sr : &Option<SourceRange>, out : &mut StdoutWrite) -> Void {
 		
-		match self {
-   			&None => try!(out.write_fmt(format_args!("{{ }}"))) ,
-			&Some(ref sr) => try!(sr.outputString(out)) ,
+		match sr {
+   			&None => try!(out.0.write_fmt(format_args!("{{ }}"))) ,
+			&Some(ref sr) => try!(outputString_SourceRange(sr, out)) ,
 		}
 		
 		Ok(())
 	}	
-}
 
 
-unsafe impl ::std::marker::Send for MessagesHandler { } // FIXME: need to review this
-
-impl diagnostic::Emitter for MessagesHandler {
-	
-    fn emit(&mut self, cmsp: Option<(&codemap::CodeMap, Span)>, msg: &str, code: Option<&str>, lvl: Level){
-    	
-    	self.output(cmsp, msg, code, lvl);
-    	
-    }
-    
-    fn custom_emit(&mut self, cm: &codemap::CodeMap, sp: RenderSpan, msg: &str, lvl: Level) {
-    	panic!("custom_emit called!");
-    }
-	
-}
 
 
 pub fn parse_analisys_do(sess : &ParseSess, parser : &mut parse::parser::Parser) {
 
 	let krate_result : parse::PResult<Crate> = parser.parse_crate_mod();
 	
-	io::stdout().flush();
+	io::stdout().flush().unwrap();
 	
 	let krate = match krate_result {
 		Err(err) => { 
-			io::stderr().write_fmt(format_args!("Error parsing source: {}\n", err)); 
+			io::stderr().write_fmt(format_args!("Error parsing source: {}\n", err)).unwrap(); 
 			return; 
 		}
 		Ok(_) => { krate_result.unwrap() }
@@ -156,7 +177,6 @@ pub fn parse_analisys_do(sess : &ParseSess, parser : &mut parse::parser::Parser)
 	
 	let mut visitor : StructureVisitor = StructureVisitor { parse_session : &sess, level : 0 };  
 	
-//	visitor.walk_crate(&krate);
 	visit::walk_crate(&mut visitor, &krate);
 	
 }
@@ -166,14 +186,9 @@ struct StructureVisitor<'ps> {
 	level : u32,
 }
 
-trait PreVisitor {
-	fn previsit(&mut self, span: Span, nodeid : NodeId) {
-	}
-}
-
-impl<'v> PreVisitor for StructureVisitor<'v> {
+impl<'ps> StructureVisitor<'ps> {
 	
-	fn previsit(&mut self, span: Span, nodeid : NodeId) {
+	fn previsit(&mut self, span: Span, _ : NodeId) {
 		print_span(&span, self.parse_session);
 	}
 	
@@ -186,8 +201,6 @@ mod structure_visitor {
 	use ::syntex_syntax::visit::*;
 	use ::syntex_syntax::ast::*;
 	use ::syntex_syntax::codemap:: { Span, Loc };
-	
-	use super::PreVisitor;
 	
 	impl<'v> Visitor<'v> for StructureVisitor<'v> {
 		

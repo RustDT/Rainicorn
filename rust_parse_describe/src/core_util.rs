@@ -5,86 +5,154 @@ use std::io;
 use std::fmt;
 use std::result;
 
-
-pub trait BasicWrite {
+pub trait CharOutput<ERR> {
 	
-    fn write_str(&mut self, s: &str) ;
+    fn write_str(&mut self, s: &str) -> result::Result<(), ERR>;
+	
+    fn write_char(&mut self, c: char) -> result::Result<(), ERR>;
+	
+}
 
-    fn write_char(&mut self, c: char) ;
+
+pub trait BasicCharOutput {
+	
+    fn put_str(&mut self, s: &str) ;
+
+    fn put_char(&mut self, c: char) ;
 
 }
 
-// TODO: might have to remove this, if it's polluting namespace?
-impl BasicWrite for String {
+impl<ERR> CharOutput<ERR> for BasicCharOutput {
 	
-    fn write_str(&mut self, str: &str) {
+    fn write_str(&mut self, s: &str) -> result::Result<(), ERR> {
+    	BasicCharOutput::put_str(self, s);
+    	Ok(())
+    }
+	
+    fn write_char(&mut self, c: char) -> result::Result<(), ERR> {
+    	BasicCharOutput::put_char(self, c);
+    	Ok(())
+    }
+	
+}
+
+//// TODO: might have to remove this, if it's polluting namespace?
+impl BasicCharOutput for String {
+	
+    fn put_str(&mut self, str: &str) {
     	self.push_str(str);
     }
 	
-    fn write_char(&mut self, ch: char) {
+    fn put_char(&mut self, ch: char) {
     	self.push(ch);
     }
 	
 }
 
+impl<ERR> CharOutput<ERR> for String {
+	
+	fn write_str(&mut self, s: &str) -> result::Result<(), ERR> {
+		self.put_str(s);
+		Ok(())
+    }
+	
+    fn write_char(&mut self, c: char) -> result::Result<(), ERR> {
+    	self.put_char(c);
+    	Ok(())
+    }
+}
 
 /* -----------------  ----------------- */
 
-pub type Result<T> = result::Result<T, CommonException2>;
-pub type Void = Result<()>;
-
 pub trait CommonException {
 	
-	fn writeMessage(&self, writer: &mut BasicWrite) ;
+	fn writeMessage(&self, writer: &mut BasicCharOutput) ;
 	
 }
 
-pub type CommonException2 = Box<CommonException>; 
+pub type BCommonException = Box<CommonException>;
+pub type Result<T> = result::Result<T, BCommonException>;
+pub type Void = Result<()>;
 
 
-fn writeSafeDisplay(displayObj : &fmt::Display, writer: &mut BasicWrite) {
+impl fmt::Display for CommonException {
 	
-	struct _BasicWrite<'a>(&'a mut BasicWrite);
+	fn fmt(&self, fmt : &mut fmt::Formatter) -> fmt::Result {
+		
+		// FIXME: optimize this by write directly to fmt through an adapter, dont crate intermediate string
+		
+		let mut str = String::new();
+		self.writeMessage(&mut str);
+		fmt.write_str(&str)
+		
+//		struct _BasicWrite<'a>(&'a mut fmt::Formatter<'a>);
+//		impl<'a> BasicWrite for _BasicWrite<'a> {
+//			fn write_str(&mut self, str: &str) {
+//				self.0.write_str(str);
+//		    }
+//			
+//		    fn write_char(&mut self, ch: char) {
+//		    	self.0.write_char(ch);
+//		    }
+//		}
+//		
+//		Ok(())
+	}
+	
+}
+
+
+
+struct FmtDisplayCommonException<T : fmt::Display>(T);
+
+impl<T : fmt::Display> CommonException for FmtDisplayCommonException<T> {
+	fn writeMessage(&self, writer: &mut BasicCharOutput) {
+		writeSafeDisplay(&self.0, writer);
+	}
+}
+
+
+fn writeSafeDisplay(displayObj : &fmt::Display, out: &mut BasicCharOutput) {
+	
+	struct _BasicWrite<'a>(&'a mut BasicCharOutput);
 	
 	impl<'a> fmt::Write for _BasicWrite<'a> {
 		fn write_str(&mut self, str: &str) -> fmt::Result {
-	    	self.0.write_str(str);
+	    	self.0.put_str(str);
 	    	Ok(())
 	    }
 		
 	    fn write_char(&mut self, ch: char) -> fmt::Result {
-	    	self.0.write_char(ch);
+	    	self.0.put_char(ch);
 	    	Ok(())
 	    }
 	    
 	}
 	
-	fmt::write(&mut _BasicWrite(writer), format_args!("{}", displayObj))
+	fmt::write(&mut _BasicWrite(out), format_args!("{}", displayObj))
 		.expect("displayObj object should not result an error.");
 	
 }
 
-impl convert::From<io::Error> for CommonException2 {
+impl convert::From<io::Error> for BCommonException {
 	fn from(obj: io::Error) -> Self {
-		
-		struct _CommonException(io::Error);
-		impl CommonException for _CommonException {
-			fn writeMessage(&self, writer: &mut BasicWrite) {
-				writeSafeDisplay(&self.0, writer);
-			}
-		}
-		
-		Box::new(_CommonException(obj))
+		Box::new(FmtDisplayCommonException(obj))
 	}
 }
 
-impl convert::From<String> for CommonException2 {
+impl convert::From<fmt::Error> for BCommonException {
+	fn from(obj: fmt::Error) -> Self {
+		Box::new(FmtDisplayCommonException(obj))
+	}
+}
+
+impl convert::From<String> for BCommonException {
 	fn from(obj: String) -> Self {
 		
 		struct _CommonException(String);
 		impl CommonException for _CommonException {
-			fn writeMessage(&self, writer: &mut BasicWrite) {
-				writer.write_str(&self.0);
+			fn writeMessage(&self, out: &mut BasicCharOutput) {
+				out.put_str(&self.0);
 			}
 		}
 		

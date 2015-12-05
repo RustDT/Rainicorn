@@ -1,17 +1,30 @@
+use ::core_util::*;
 
-use std::io;
+use std::result;
 
-pub fn toStringToken(string : &str, out : &mut io::Write) -> io::Result<()> {
+pub fn writeStringToken<ERR> (string : &str, out : &mut CharOutput<ERR>) -> result::Result<(), ERR> {
 	
 	use std::fmt::Write;
 	
 	for ch in string.chars() {
-		let mut buf = String::new();
-		buf.write_char(ch).unwrap();
 		
-		try!(out.write_all(buf.as_bytes()));
-	
+		try!(out.write_char(ch));
+		
 	}
 	
 	Ok(())
+}
+
+#[cfg(test)]
+fn test_writeStringToken() {
+	
+	fn check_writeStringToken(string : &str, expected : &str) {
+		let mut result = String::new();
+		writeStringToken(string, &mut result as &mut CharOutput<()>);
+		assert_eq!(result, expected);
+	}
+	
+	check_writeStringToken("abc", r#""abc""#);
+	
+	check_writeStringToken("a\"bc\"", r#""a\"bc\"""#);
 }
