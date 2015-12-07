@@ -3,6 +3,7 @@
 extern crate syntex_syntax;
 
 pub mod core_util;
+pub mod misc_util;
 pub mod token_writer;
 pub mod ranges;
 pub mod parse_describe;
