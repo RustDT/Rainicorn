@@ -1,6 +1,23 @@
 use ::core_util::*;
+use ::misc_util::*;
 
 use std::result;
+use std::fmt;
+
+
+/// Write a parse structure into a serialized format
+pub struct TokenWriter {
+	pub out : Box<StdoutWrite>, // TODO: change to ARC or something
+	//out : &'a mut StdoutWrite,
+}
+
+impl<'a> TokenWriter {
+	
+	pub fn writeStringToken(&mut self, string : &str) -> result::Result<(), fmt::Error> {
+		self::writeStringToken(string, &mut* self.out)
+	}
+	
+}
 
 pub fn writeStringToken<ERR>(string : &str, out : &mut CharOutput<ERR>) -> result::Result<(), ERR> {
 	

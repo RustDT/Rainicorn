@@ -16,10 +16,12 @@ use std::io;
 use std::fmt;
 use std::io::Write;
 
+use ::token_writer::TokenWriter;
 
 pub fn parse_analysis(source : &str) {
 	
-	let myEmitter = MessagesHandler::new(io::stdout());
+	let tokenWriter = TokenWriter { out : Box::new(StdoutWrite(io::stdout())) };
+	let myEmitter = MessagesHandler::new(tokenWriter);
 	let handler = Handler::with_emitter(true, Box::new(myEmitter));
 	let spanhandler = SpanHandler::new(handler, CodeMap::new());
 	let sess = ParseSess::with_span_handler(spanhandler);
@@ -33,24 +35,10 @@ pub fn parse_analysis(source : &str) {
 }
 
 struct MessagesHandler {
-	out : Box<io::Stdout>,
+	tokenWriter: TokenWriter,
 }
 
 
-use ::token_writer;
-
-
-impl<'l> CharOutput<fmt::Error> for StdoutWrite<'l> {
-	
-    fn write_str(&mut self, string: &str) -> fmt::Result {
-    	fmt::Write::write_str(self, string)
-    }
-	
-    fn write_char(&mut self, c: char) -> fmt::Result {
-    	fmt::Write::write_char(self, c)
-    }
-	
-}
 
 
 unsafe impl ::std::marker::Send for MessagesHandler { } // FIXME: need to review this
@@ -76,8 +64,8 @@ impl diagnostic::Emitter for MessagesHandler {
 
 impl MessagesHandler {
 	
-	fn new(writer: io::Stdout) -> MessagesHandler {
-		 MessagesHandler{ out : Box::new(writer), }
+	fn new(tokenWriter : TokenWriter) -> MessagesHandler {
+		MessagesHandler{ tokenWriter : tokenWriter }
 	}
 	
 	fn outputMessage(&mut self, cmsp: Option<(&codemap::CodeMap, Span)>, msg: &str, _: Option<&str>, lvl: Level) 
@@ -88,33 +76,23 @@ impl MessagesHandler {
 			None => None,
 		};
 		
-		let char_out = &mut StdoutWrite(&mut self.out);
-		let structureWriter = ParseStructureWriter { out : char_out };
 		
-		try!(structureWriter.out.write_str("MESSAGE { "));
+		try!(self.tokenWriter.out.write_str("MESSAGE { "));
 		
-		try!(outputString_Level(&lvl, structureWriter.out));
+		try!(outputString_Level(&lvl, &mut self.tokenWriter));
 		
-		try!(outputString_optSourceRange(&sourcerange, structureWriter.out));
+		try!(outputString_optSourceRange(&sourcerange, &mut self.tokenWriter));
 		
-		try!(token_writer::writeStringToken(msg, structureWriter.out));
+		try!(self.tokenWriter.writeStringToken(msg));
 		
-		try!(structureWriter.out.write_str("}\n"));
+		try!(self.tokenWriter.out.write_str("}\n"));
 		
 		Ok(())
 	}
 }
 
-/// Write a parse structure into a serialized format
-struct ParseStructureWriter<'a> {
-	out : &'a mut StdoutWrite<'a>,
-}
 
-impl<'a> ParseStructureWriter<'a> {
-	
-}
-
-	fn outputString_Level(lvl : &Level, out : &mut StdoutWrite) -> Void {
+	fn outputString_Level(lvl : &Level, writer : &mut TokenWriter) -> Void {
 		let str = match *lvl {
 			Level::Bug => panic!("Bug parsing error code"),
 			Level::Fatal => "error",
@@ -124,15 +102,15 @@ impl<'a> ParseStructureWriter<'a> {
 			Level::Help => "help",
 		};
 		
-		try!(out.write_str(str));
-		try!(out.write_str(" "));
+		try!(writer.out.write_str(str));
+		try!(writer.out.write_str(" "));
 		
 		Ok(())
 	}
 	
-	fn outputString_SourceRange(sr : &SourceRange, out : &mut StdoutWrite) -> Void {
+	fn outputString_SourceRange(sr : &SourceRange, writer : &mut TokenWriter) -> Void {
 		
-		try!(out.0.write_fmt(format_args!("{{ {} {} {} {} }}", 
+		try!(writer.out.0.write_fmt(format_args!("{{ {} {} {} {} }}", 
 			sr.start_pos.line, sr.start_pos.col.0,
 			sr.end_pos.line, sr.start_pos.col.0,
 		)));
@@ -140,14 +118,14 @@ impl<'a> ParseStructureWriter<'a> {
 		Ok(())
 	}
 	
-	fn outputString_optSourceRange(sr : &Option<SourceRange>, out : &mut StdoutWrite) -> Void {
+	fn outputString_optSourceRange(sr : &Option<SourceRange>, writer : &mut TokenWriter) -> Void {
 		
 		match sr {
-			&None => try!(out.write_str("{ }")) ,
-			&Some(ref sr) => try!(outputString_SourceRange(sr, out)) ,
+			&None => try!(writer.out.write_str("{ }")) ,
+			&Some(ref sr) => try!(outputString_SourceRange(sr, writer)) ,
 		}
 		
-		try!(out.write_str(" "));
+		try!(writer.out.write_str(" "));
 		
 		Ok(())
 	}	
