@@ -2,7 +2,7 @@
 name = "rust_parse_describe"
 version = "0.0.1"
 dependencies = [
- "syntex_syntax 0.22.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "syntex_syntax 0.23.0 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
@@ -39,7 +39,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 
 [[package]]
 name = "syntex_syntax"
-version = "0.22.0"
+version = "0.23.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
  "bitflags 0.3.3 (registry+https://github.com/rust-lang/crates.io-index)",

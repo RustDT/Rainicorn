@@ -3,42 +3,55 @@ use ::misc_util::*;
 use ::ranges::*;
 
 use ::syntex_syntax::syntax::ast::*;
-use ::syntex_syntax::parse::{ ParseSess };
-use ::syntex_syntax::parse;
+use ::syntex_syntax::parse::{ self, ParseSess };
 use ::syntex_syntax::visit;
-use ::syntex_syntax::codemap:: { Span, Loc, CodeMap};
-use ::syntex_syntax::codemap;
-use ::syntex_syntax::diagnostic:: { SpanHandler, Handler, RenderSpan, Level};
-use ::syntex_syntax::diagnostic;
+use ::syntex_syntax::codemap:: { self, Span, Loc, CodeMap};
+use ::syntex_syntax::diagnostic:: { self, SpanHandler, Handler, RenderSpan, Level };
 
 use std::boxed::Box;
 use std::io;
-use std::fmt;
 use std::io::Write;
 
 use ::token_writer::TokenWriter;
 
+//use std::cell::*;
+use std::rc::*;
+
 pub fn parse_analysis(source : &str) {
 	
 	let tokenWriter = TokenWriter { out : Box::new(StdoutWrite(io::stdout())) };
-	let myEmitter = MessagesHandler::new(tokenWriter);
-	let handler = Handler::with_emitter(true, Box::new(myEmitter));
-	let spanhandler = SpanHandler::new(handler, CodeMap::new());
-	let sess = ParseSess::with_span_handler(spanhandler);
-	
-	let cfg = vec![];
-
-	let mut parser = parse::new_parser_from_source_str(&sess, cfg, "name".to_string(), source.to_string());
+	let mut tokenWriter = Rc::new(tokenWriter);
 	
 	println!("RUST_PARSE_DESCRIBE 0.1");
-	parse_analysis_do(&sess, &mut parser);
+	
+	let krate_result : parse::PResult<Crate>;
+	let codemap;
+	
+	{	
+		let myEmitter = MessagesHandler { tokenWriter : tokenWriter.clone() };
+		let handler = Handler::with_emitter(true, Box::new(myEmitter));
+		let spanhandler = SpanHandler::new(handler, CodeMap::new());
+		let sess = ParseSess::with_span_handler(spanhandler);
+		
+		let cfg = vec![];
+		
+		let krateName = "name".to_string(); // XXX: mod name
+		
+		krate_result = 
+			parse::new_parser_from_source_str(&sess, cfg, krateName, source.to_string())
+			.parse_crate_mod();
+		
+		codemap = sess.span_diagnostic.cm;
+	}	
+	
+	let tokenWriter = Rc::get_mut(&mut tokenWriter).unwrap();
+	
+	writeCrateStructure(&codemap, &krate_result, tokenWriter);
 }
 
 struct MessagesHandler {
-	tokenWriter: TokenWriter,
+	tokenWriter: Rc<TokenWriter>,
 }
-
-
 
 
 unsafe impl ::std::marker::Send for MessagesHandler { } // FIXME: need to review this
@@ -64,10 +77,6 @@ impl diagnostic::Emitter for MessagesHandler {
 
 impl MessagesHandler {
 	
-	fn new(tokenWriter : TokenWriter) -> MessagesHandler {
-		MessagesHandler{ tokenWriter : tokenWriter }
-	}
-	
 	fn outputMessage(&mut self, cmsp: Option<(&codemap::CodeMap, Span)>, msg: &str, _: Option<&str>, lvl: Level) 
 		-> Void
 	{
@@ -76,16 +85,16 @@ impl MessagesHandler {
 			None => None,
 		};
 		
+		let mut tokenWriter = Rc::get_mut(&mut self.tokenWriter).unwrap();
+		try!(tokenWriter.out.write_str("MESSAGE { "));
 		
-		try!(self.tokenWriter.out.write_str("MESSAGE { "));
+		try!(outputString_Level(&lvl, &mut tokenWriter));
 		
-		try!(outputString_Level(&lvl, &mut self.tokenWriter));
+		try!(outputString_optSourceRange(&sourcerange, &mut tokenWriter));
 		
-		try!(outputString_optSourceRange(&sourcerange, &mut self.tokenWriter));
+		try!(tokenWriter.writeStringToken(msg));
 		
-		try!(self.tokenWriter.writeStringToken(msg));
-		
-		try!(self.tokenWriter.out.write_str("}\n"));
+		try!(tokenWriter.out.write_str("}\n"));
 		
 		Ok(())
 	}
@@ -133,35 +142,33 @@ impl MessagesHandler {
 
 
 
-pub fn parse_analysis_do(sess : &ParseSess, parser : &mut parse::parser::Parser) {
+pub fn writeCrateStructure(codemap : &CodeMap, krate_result : &parse::PResult<Crate>, tokenWriter : &mut TokenWriter) {
 
-	let krate_result : parse::PResult<Crate> = parser.parse_crate_mod();
-	
 	io::stdout().flush().unwrap();
 	
 	let krate = match krate_result {
-		Err(err) => { 
+		&Err(err) => { 
 			io::stderr().write_fmt(format_args!("Error parsing source: {}\n", err)).unwrap(); 
 			return; 
 		}
-		Ok(_) => { krate_result.unwrap() }
+		&Ok(ref ok_krate) => { ok_krate }
 	};
 	
-	let mut visitor : StructureVisitor = StructureVisitor { parse_session : &sess, level : 0 };  
+	let mut visitor : StructureVisitor = StructureVisitor { codemap : codemap, level : 0 };  
 	
 	visit::walk_crate(&mut visitor, &krate);
 	
 }
 
 struct StructureVisitor<'ps> {
-	parse_session : & 'ps ParseSess,
+	codemap : & 'ps CodeMap,
 	level : u32,
 }
 
 impl<'ps> StructureVisitor<'ps> {
 	
 	fn previsit(&mut self, span: Span, _ : NodeId) {
-		print_span(&span, self.parse_session);
+		print_span(&span, self.codemap);
 	}
 	
 }
@@ -188,6 +195,8 @@ mod structure_visitor {
 		 
 		walk_mod(self, m) 
 	}
+	
+	
 	fn visit_foreign_item(&mut self, i: &'v ForeignItem) { 
 		walk_foreign_item(self, i) 
 	}
@@ -266,6 +275,7 @@ mod structure_visitor {
 		
 		walk_variant(self, v, g, nodeid)
 	}
+	
 	fn visit_lifetime(&mut self, lifetime: &'v Lifetime) {
 		walk_lifetime(self, lifetime)
 	}
@@ -275,6 +285,7 @@ mod structure_visitor {
 	fn visit_explicit_self(&mut self, es: &'v ExplicitSelf) {
 		walk_explicit_self(self, es)
 	}
+	
 	fn visit_mac(&mut self, _mac: &'v Mac) {
 		panic!("visit_mac disabled by default");
 		// NB: see note about macros above.
@@ -312,9 +323,9 @@ mod structure_visitor {
 
 /* -----------------  ----------------- */
 
-fn print_span(span : &Span, session : &parse::ParseSess) {
-	let start_pos = session.codemap().lookup_char_pos(span.lo);
-	let end_pos = session.codemap().lookup_char_pos(span.hi);
+fn print_span(span : &Span, codemap : &CodeMap) {
+	let start_pos = codemap.lookup_char_pos(span.lo);
+	let end_pos = codemap.lookup_char_pos(span.hi);
 	print_locs(&start_pos, &end_pos);
 }
 

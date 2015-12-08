@@ -6,6 +6,7 @@ use std::fmt;
 
 
 /// Write a parse structure into a serialized format
+#[derive(Debug)]
 pub struct TokenWriter {
 	pub out : Box<StdoutWrite>, // TODO: change to ARC or something
 	//out : &'a mut StdoutWrite,

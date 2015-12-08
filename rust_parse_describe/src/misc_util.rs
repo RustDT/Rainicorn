@@ -18,6 +18,14 @@ impl fmt::Write for StdoutWrite {
 	
 }
 
+impl fmt::Debug for StdoutWrite {
+	
+	fn fmt(&self, fmt : &mut fmt::Formatter) -> fmt::Result {
+		fmt.write_str("[StdoutWrite]")
+	}
+	
+}
+
 impl CharOutput<fmt::Error> for StdoutWrite {
 	
     fn write_str(&mut self, string: &str) -> fmt::Result {
