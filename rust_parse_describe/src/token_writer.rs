@@ -1,5 +1,5 @@
-use ::core_util::*;
-use ::misc_util::*;
+use ::util::core::*;
+use ::util::string::*;
 
 use std::result;
 use std::fmt;
@@ -16,6 +16,12 @@ impl<'a> TokenWriter {
 	
 	pub fn writeStringToken(&mut self, string : &str) -> result::Result<(), fmt::Error> {
 		self::writeStringToken(string, &mut* self.out)
+	}
+	
+	pub fn writeTextToken(&mut self, string : &str) -> result::Result<(), fmt::Error> {
+		self.out.write_str(string)
+		//FIXME: check escapes
+//		self::writeStringToken(string, &mut* self.out)
 	}
 	
 }

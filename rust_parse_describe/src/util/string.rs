@@ -1,4 +1,4 @@
-use ::core_util::*;
+use ::util::core::*;
 
 use std::io;
 use std::fmt;
@@ -36,4 +36,11 @@ impl CharOutput<fmt::Error> for StdoutWrite {
     	fmt::Write::write_char(self, c)
     }
 	
+}
+
+pub fn writeNTimes<OUT : fmt::Write>(out : &mut OUT, ch : char, count : u32) -> fmt::Result {
+	for _ in 0 .. count {
+		try!(out.write_char(ch))
+	}
+	Ok(())
 }
