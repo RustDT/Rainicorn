@@ -185,5 +185,18 @@ fn test_fmt_error() {
 	let mut result = String::new();
 	writeSafeDisplay(&_Display(()), &mut result);
 	assert_eq!(result, "Blah XXX");
-	
+}
+
+
+/* -----------------  ----------------- */
+
+use std::rc::Rc;
+use std::cell::RefCell;
+
+pub fn unwrapRcRefCell<T>(this: Rc<RefCell<T>>) -> T {
+	let ures : result::Result<RefCell<_>, _> = Rc::try_unwrap(this);
+	match ures {
+		Ok(refCell) => return refCell.into_inner(),
+		Err(_) => panic!("std::Rc unwrap failed")
+	}
 }

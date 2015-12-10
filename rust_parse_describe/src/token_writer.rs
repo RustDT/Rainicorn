@@ -1,32 +1,51 @@
 use ::util::core::*;
-use ::util::string::*;
 
 use std::result;
 use std::fmt;
 
+pub use std::cell::{ RefCell , RefMut };
+pub use std::rc::{ Rc };
 
 /// Write a parse structure into a serialized format
-#[derive(Debug)]
 pub struct TokenWriter {
-	pub out : Box<StdoutWrite>, // TODO: change to ARC or something
-	//out : &'a mut StdoutWrite,
+	pub out : Rc<RefCell<fmt::Write>>,
 }
 
-impl<'a> TokenWriter {
+impl fmt::Debug for TokenWriter {
+	
+	fn fmt(&self, fmt : &mut fmt::Formatter) -> fmt::Result {
+		fmt.write_str("[TokenWriter]")
+	}
+	
+}
+
+impl TokenWriter {
+	
+	pub fn getCharOut(&self) -> RefMut<fmt::Write + 'static> {
+		self.out.borrow_mut()
+	}
 	
 	pub fn writeStringToken(&mut self, string : &str) -> result::Result<(), fmt::Error> {
-		self::writeStringToken(string, &mut* self.out)
+		self::writeStringToken(string, &mut* self.getCharOut())
+	}
+	
+	pub fn writeRaw(&mut self, string : &str) -> result::Result<(), fmt::Error> {
+		self.getCharOut().write_str(string)
 	}
 	
 	pub fn writeTextToken(&mut self, string : &str) -> result::Result<(), fmt::Error> {
-		self.out.write_str(string)
+		self.getCharOut().write_str(string)
 		//FIXME: check escapes
 //		self::writeStringToken(string, &mut* self.out)
 	}
 	
 }
 
-pub fn writeStringToken<ERR>(string : &str, out : &mut CharOutput<ERR>) -> result::Result<(), ERR> {
+pub fn writeStringToken<OUT : ?Sized + fmt::Write>(string : &str, out : &mut OUT) 
+	-> fmt::Result 
+//pub fn writeStringToken<ERR, OUT : ?Sized + CharOutput<ERR>>(string : &str, out : &mut OUT) 
+//	-> result::Result<(), ERR> 
+{
 	
 	use std::fmt::Write;
 	
@@ -48,7 +67,8 @@ pub fn writeStringToken<ERR>(string : &str, out : &mut CharOutput<ERR>) -> resul
 
 pub fn writeStringToken_toString(string : &str) -> String {
 	let mut result = String::new();
-	writeStringToken(string, &mut result as &mut CharOutput<()>).unwrap();
+//	writeStringToken(string, &mut result as &mut CharOutput<()>).unwrap();
+	writeStringToken(string, &mut result).unwrap();
 	result
 }
 

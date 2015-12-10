@@ -18,41 +18,74 @@ pub struct StructureVisitor<'ps> {
 	pub codemap : & 'ps CodeMap,
 	pub tokenWriter : &'ps mut TokenWriter,
 	pub level : u32,
+	pub isFirstChild : bool,
 }
 
 impl<'ps> StructureVisitor<'ps> {
 	
 	pub fn new(codemap : &'ps CodeMap, tokenWriter : &'ps mut TokenWriter) -> StructureVisitor<'ps> {
-		StructureVisitor { codemap : codemap, tokenWriter : tokenWriter, level : 0 }
+		StructureVisitor { 
+			codemap : codemap, tokenWriter : tokenWriter, 
+			level : 0, isFirstChild : true 
+		}
+	}
+	
+	pub fn writeIndent(&mut self) -> Void {
+		try!(writeNTimes(&mut *self.tokenWriter.getCharOut(), ' ', self.level * 2));
+		Ok(())
 	}
 	
 	pub fn writeElement_do<FN>(&mut self, ident: &str, sourceRange: &SourceRange, walkFn : FN) 
-		where FN : Fn(&mut Self)
+		-> Void
+		where FN : Fn(&mut Self) 
 	{
-//		self.tokenWriter.out.write_str("\n");
-		writeNTimes(&mut *self.tokenWriter.out, ' ', self.level);
+		try!(self.tokenWriter.getCharOut().write_str("\n"));
+		try!(self.writeIndent());
 		
-		self.tokenWriter.writeTextToken("ITEM");
-		self.tokenWriter.writeTextToken(" { ");
+		try!(self.tokenWriter.writeTextToken("ITEM"));
+		try!(self.tokenWriter.writeTextToken(" { "));
 		
-		self.tokenWriter.writeStringToken(ident);
+		try!(self.tokenWriter.writeStringToken(ident));
 		
-		outputString_SourceRange(sourceRange, &mut self.tokenWriter);
+		try!(outputString_SourceRange(sourceRange, &mut self.tokenWriter));
 		
 		self.level += 1;
+		self.isFirstChild = true;
 		walkFn(self);
 		self.level -= 1;
 		
-//		self.tokenWriter.out.write_str("\n");
-		writeNTimes(&mut *self.tokenWriter.out, ' ', self.level);
-		self.tokenWriter.out.write_str(" }\n");
+		if self.isFirstChild {
+			try!(self.tokenWriter.getCharOut().write_str(" "));
+		} else {
+			try!(self.tokenWriter.getCharOut().write_str("\n"));
+			try!(self.writeIndent());
+		}
+		
+		try!(self.tokenWriter.getCharOut().write_str("}"));
+		
+		self.isFirstChild = false;
+		Ok(())
 	}
 	
-	
-	pub fn writeElement<FN>(&mut self, ident: Ident, span: Span, walkFn : FN) 
+	pub fn writeElement_handled<FN>(&mut self, ident: &str, sourceRange: &SourceRange, walkFn : FN)
 		where FN : Fn(&mut Self)
 	{
-		self.writeElement_do(&*ident.name.as_str(), &SourceRange::new(self.codemap, span), walkFn);
+		use ::std::io::Write;
+		
+		match 
+			self.writeElement_do(ident, sourceRange, walkFn)
+		{
+			Ok(ok) => { ok } 
+			Err(error) => { 
+				::std::io::stderr().write_fmt(format_args!("Error writing element: {}", error)).ok(); 
+			}
+		}
+	}
+	
+	pub fn writeElement<FN>(&mut self, ident: Ident, span: Span, walkFn : FN)
+		where FN : Fn(&mut Self)
+	{
+		self.writeElement_handled(&*ident.name.as_str(), &SourceRange::new(self.codemap, span), walkFn)
 	}
 	
 }
@@ -68,11 +101,10 @@ impl<'v> Visitor<'v> for StructureVisitor<'v> {
 	}
 	
 	fn visit_mod(&mut self, m: &'v Mod, span: Span, _nodeid: NodeId) {
-		let ident = Ident::with_empty_ctxt(Name(12));
 		
-		self.writeElement_do("_file_", &SourceRange::new(self.codemap, span), |_self : &mut Self| { 
+		self.writeElement_handled("_file_", &SourceRange::new(self.codemap, span), |_self : &mut Self| { 
 			walk_mod(_self, m);
-		});
+		})
 	}
 	
 	
@@ -220,4 +252,28 @@ impl<'v> Visitor<'v> for StructureVisitor<'v> {
 		walk_macro_def(self, macro_def)
 	}
 	
+}
+
+
+#[test]
+fn tests_writeStructureElement() {
+	
+	use ::std::rc::Rc;
+	use ::std::cell::RefCell;
+	
+	fn test_writeStructureElement(elemName : &str, sr: &SourceRange, expected : &str) {
+		let stringRc = Rc::new(RefCell::new(String::new()));
+		{
+			let mut tw = TokenWriter { out : stringRc.clone() };
+			
+			let cm = CodeMap::new();
+			let mut sv = StructureVisitor::new(&cm, &mut tw);
+			
+			sv.writeElement_do(elemName, &sr, |_| { } );
+		}
+		
+		assert_eq!(unwrapRcRefCell(stringRc).trim(), expected);
+	}
+	
+	test_writeStructureElement("blah", &sourceRange(1, 0, 2, 5), "ITEM { \"blah\"{ 1 0 2 5 } }");
 }

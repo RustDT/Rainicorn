@@ -31,4 +31,12 @@ impl SourceRange {
 			end_pos : LineColumnPosition{ line: endLoc.line, col : endLoc.col },
 		}
 	}
+	
+}
+
+pub fn sourceRange(start_line : usize, start_col : usize, end_line : usize, end_col : usize) -> SourceRange {
+	SourceRange { 
+		start_pos : LineColumnPosition { line : start_line, col : CharPos(start_col) },
+		end_pos : LineColumnPosition { line : end_line, col : CharPos(end_col) },
+	}
 }

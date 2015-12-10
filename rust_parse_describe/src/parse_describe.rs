@@ -17,37 +17,36 @@ use ::token_writer::TokenWriter;
 use std::cell::RefCell;
 use std::rc::*;
 
+
 pub fn parse_analysis(source : &str) {
 	
-	let tokenWriter = TokenWriter { out : Box::new(StdoutWrite(io::stdout())) };
-	let tokenWriter = Rc::new(RefCell::new(tokenWriter));
+	let tokenWriter = TokenWriter { out : Rc::new(RefCell::new(StdoutWrite(io::stdout()))) };
+	let tokenWriterRc : Rc<RefCell<TokenWriter>> = Rc::new(RefCell::new(tokenWriter));
 	
 	println!("RUST_PARSE_DESCRIBE 0.1");
 	
-	let krate_result : parse::PResult<Crate>;
-	let codemap;
+	let (krate_result, codemap) = parse_crate(source, tokenWriterRc.clone()); 
 	
-	{	
-		let myEmitter = MessagesHandler { tokenWriter : tokenWriter.clone() };
-		let handler = Handler::with_emitter(true, Box::new(myEmitter));
-		let spanhandler = SpanHandler::new(handler, CodeMap::new());
-		let sess = ParseSess::with_span_handler(spanhandler);
-		
-		let cfg = vec![];
-		
-		let krateName = "name".to_string(); // XXX: fix crate name
-		
-		krate_result = 
-			parse::new_parser_from_source_str(&sess, cfg, krateName, source.to_string())
-			.parse_crate_mod();
-		
-		codemap = sess.span_diagnostic.cm;
-	}	
+	let mut tokenWriter = unwrapRcRefCell(tokenWriterRc);
 	
-	let cell : RefCell<TokenWriter> = Rc::try_unwrap(tokenWriter).unwrap();
-	let tokenWriter : &mut TokenWriter = &mut cell.borrow_mut();
+	writeCrateStructure(&codemap, &krate_result, &mut tokenWriter);
+}
+
+pub fn parse_crate(source : &str, tokenWriter : Rc<RefCell<TokenWriter>>) -> (parse::PResult<Crate>, CodeMap) {
+	let myEmitter = MessagesHandler { tokenWriter : tokenWriter };
+	let handler = Handler::with_emitter(true, Box::new(myEmitter));
+	let spanhandler = SpanHandler::new(handler, CodeMap::new());
+	let sess = ParseSess::with_span_handler(spanhandler);
 	
-	writeCrateStructure(&codemap, &krate_result, tokenWriter);
+	let cfg = vec![];
+	
+	let krateName = "_file_module_".to_string();
+	
+	let krate_result = 
+		parse::new_parser_from_source_str(&sess, cfg, krateName, source.to_string())
+		.parse_crate_mod();
+	
+	return (krate_result, sess.span_diagnostic.cm);
 }
 
 struct MessagesHandler {
@@ -87,7 +86,7 @@ impl MessagesHandler {
 		};
 		
 		let mut tokenWriter = &mut self.tokenWriter.borrow_mut();
-		try!(tokenWriter.out.write_str("MESSAGE { "));
+		try!(tokenWriter.out.borrow_mut().write_str("MESSAGE { "));
 		
 		try!(outputString_Level(&lvl, &mut tokenWriter));
 		
@@ -95,7 +94,7 @@ impl MessagesHandler {
 		
 		try!(tokenWriter.writeStringToken(msg));
 		
-		try!(tokenWriter.out.write_str("}\n"));
+		try!(tokenWriter.out.borrow_mut().write_str("}\n"));
 		
 		Ok(())
 	}
@@ -120,7 +119,8 @@ pub fn writeCrateStructure(codemap : &CodeMap, krate_result : &parse::PResult<Cr
 	
 	visit::walk_crate(&mut visitor, &krate);
 	
-}
+}
+
 
 /* -----------------  ----------------- */
 
@@ -135,17 +135,17 @@ pub fn outputString_Level(lvl : &Level, writer : &mut TokenWriter) -> Void {
 		Level::Help => "help",
 	};
 	
-	try!(writer.out.write_str(str));
-	try!(writer.out.write_str(" "));
+	try!(writer.out.borrow_mut().write_str(str));
+	try!(writer.out.borrow_mut().write_str(" "));
 	
 	Ok(())
 }
 
 pub fn outputString_SourceRange(sr : &SourceRange, writer : &mut TokenWriter) -> Void {
-	
-	try!(writer.out.0.write_fmt(format_args!("{{ {} {} {} {} }}", 
+	let mut out = writer.out.borrow_mut(); 
+	try!(out.write_fmt(format_args!("{{ {} {} {} {} }}", 
 		sr.start_pos.line, sr.start_pos.col.0,
-		sr.end_pos.line, sr.start_pos.col.0,
+		sr.end_pos.line, sr.end_pos.col.0,
 	)));
 	
 	Ok(())
@@ -154,11 +154,11 @@ pub fn outputString_SourceRange(sr : &SourceRange, writer : &mut TokenWriter) ->
 pub fn outputString_optSourceRange(sr : &Option<SourceRange>, writer : &mut TokenWriter) -> Void {
 	
 	match sr {
-		&None => try!(writer.out.write_str("{ }")) ,
+		&None => try!(writer.out.borrow_mut().write_str("{ }")) ,
 		&Some(ref sr) => try!(outputString_SourceRange(sr, writer)) ,
 	}
 	
-	try!(writer.out.write_str(" "));
+	try!(writer.out.borrow_mut().write_str(" "));
 	
 	Ok(())
 }
