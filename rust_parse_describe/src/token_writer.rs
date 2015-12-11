@@ -25,16 +25,20 @@ impl TokenWriter {
 		self.out.borrow_mut()
 	}
 	
-	pub fn writeStringToken(&mut self, string : &str) -> result::Result<(), fmt::Error> {
-		self::writeStringToken(string, &mut* self.getCharOut())
-	}
-	
 	pub fn writeRaw(&mut self, string : &str) -> result::Result<(), fmt::Error> {
 		self.getCharOut().write_str(string)
 	}
 	
+	pub fn writeStringToken(&mut self, string : &str) -> result::Result<(), fmt::Error> {
+		try!(self::writeStringToken(string, &mut* self.getCharOut()));
+		
+		self.getCharOut().write_char(' ')
+	}
+	
 	pub fn writeTextToken(&mut self, string : &str) -> result::Result<(), fmt::Error> {
-		self.getCharOut().write_str(string)
+		try!(self.getCharOut().write_str(string));
+		
+		self.getCharOut().write_char(' ')
 		//FIXME: check escapes
 //		self::writeStringToken(string, &mut* self.out)
 	}

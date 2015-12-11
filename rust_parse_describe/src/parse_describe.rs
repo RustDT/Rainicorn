@@ -17,10 +17,59 @@ use ::token_writer::TokenWriter;
 use std::cell::RefCell;
 use std::rc::*;
 
+/* ----------------- Model ----------------- */
+
+pub enum StructureElementKind {
+	File,
+	ExternCrate,
+	Var,
+	Mod,
+	Use,
+	Function,
+	Struct,
+	Impl,
+	Trait,
+	Enum,
+	EnumElem,
+	TypeAlias,
+}
+
+
+use std::fmt;
+
+impl StructureElementKind {
+	pub fn writeString(&self, out : &mut fmt::Write) -> fmt::Result {
+		match *self {
+			StructureElementKind::File => out.write_str("File"),
+			StructureElementKind::ExternCrate => out.write_str("ExternCrate"),
+			StructureElementKind::Var => out.write_str("Var"),
+			StructureElementKind::Mod => out.write_str("Mod"),
+			StructureElementKind::Use => out.write_str("Use"),
+			StructureElementKind::Function => out.write_str("Function"),
+			StructureElementKind::Struct => out.write_str("Struct"),
+			StructureElementKind::Impl => out.write_str("Impl"),
+			StructureElementKind::Trait => out.write_str("Trait"),
+			StructureElementKind::Enum => out.write_str("Enum"),
+			StructureElementKind::EnumElem => out.write_str("EnumElem"),
+			StructureElementKind::TypeAlias => out.write_str("TypeAlias"),
+		}
+	}
+}
+
+
+/* -----------------  ----------------- */
+
+use ::structure_visitor::StructureVisitor;
 
 pub fn parse_analysis(source : &str) {
 	
-	let tokenWriter = TokenWriter { out : Rc::new(RefCell::new(StdoutWrite(io::stdout()))) };
+	let out = Rc::new(RefCell::new(StdoutWrite(io::stdout())));
+	writeCrateStructureForSource(source, out);
+}
+
+pub fn writeCrateStructureForSource(source : &str, out : Rc<RefCell<fmt::Write>>) {
+	
+	let tokenWriter = TokenWriter { out : out };
 	let tokenWriterRc : Rc<RefCell<TokenWriter>> = Rc::new(RefCell::new(tokenWriter));
 	
 	println!("RUST_PARSE_DESCRIBE 0.1");
@@ -29,7 +78,19 @@ pub fn parse_analysis(source : &str) {
 	
 	let mut tokenWriter = unwrapRcRefCell(tokenWriterRc);
 	
-	writeCrateStructure(&codemap, &krate_result, &mut tokenWriter);
+	io::stdout().flush().unwrap();
+	
+	let krate = match krate_result {
+		Err(err) => { 
+			io::stderr().write_fmt(format_args!("Error parsing source: {}\n", err)).unwrap(); 
+			return; 
+		}
+		Ok(ref ok_krate) => { ok_krate }
+	};
+	
+	let mut visitor : StructureVisitor = StructureVisitor::new(&codemap, &mut tokenWriter);  
+	
+	visit::walk_crate(&mut visitor, &krate);
 }
 
 pub fn parse_crate(source : &str, tokenWriter : Rc<RefCell<TokenWriter>>) -> (parse::PResult<Crate>, CodeMap) {
@@ -49,6 +110,7 @@ pub fn parse_crate(source : &str, tokenWriter : Rc<RefCell<TokenWriter>>) -> (pa
 	return (krate_result, sess.span_diagnostic.cm);
 }
 
+
 struct MessagesHandler {
 	tokenWriter: Rc<RefCell<TokenWriter>>,
 }
@@ -60,37 +122,56 @@ impl diagnostic::Emitter for MessagesHandler {
 	
     fn emit(&mut self, cmsp: Option<(&codemap::CodeMap, Span)>, msg: &str, code: Option<&str>, lvl: Level) {
     	
-    	match self.outputMessage(cmsp, msg, code, lvl) {
+    	match code {
+    		None => {}
+    		Some(code) => {
+    			io::stderr().write_fmt(format_args!("Code: {}\n", code)).unwrap();
+    			panic!("code &str??");
+			}
+    	}
+    	
+    	
+		let sourcerange = match cmsp {
+			Some((codemap, span)) => Some(SourceRange::new(codemap, span)),
+			None => None,
+		};
+		
+		match self.outputMessage(sourcerange, msg, lvl) {
     		Ok(_) => {}
+    		Err(err) => {
+    			io::stderr().write_fmt(format_args!("Error serializing compiler message: {}\n", err)).ok();
+    			io::stderr().flush().ok();
+			}
+    	}
+    }
+    
+    fn custom_emit(&mut self, _: &codemap::CodeMap, _: RenderSpan, msg: &str, lvl: Level) {
+    	if match lvl { Level::Help | Level::Note => true, _ => false } {
+    		return;
+    	}
+    	
+    	match self.outputMessage(None, msg, lvl) {
+    		Ok(_) => { }
     		Err(err) => {
     			io::stderr().write_fmt(format_args!("Error serializing compiler message: {}\n", err)).unwrap();
 			}
     	}
-    	
-    }
-    
-    fn custom_emit(&mut self, _: &codemap::CodeMap, _: RenderSpan, _: &str, _: Level) {
-    	panic!("custom_emit called!");
     }
 	
 }
 
 impl MessagesHandler {
 	
-	fn outputMessage(&mut self, cmsp: Option<(&codemap::CodeMap, Span)>, msg: &str, _: Option<&str>, lvl: Level) 
+	fn outputMessage(&mut self, opt_sr : Option<SourceRange>, msg: &str, lvl: Level) 
 		-> Void
 	{
-		let sourcerange = match cmsp {
-			Some((codemap, span)) => Some(SourceRange::new(codemap, span)),
-			None => None,
-		};
 		
 		let mut tokenWriter = &mut self.tokenWriter.borrow_mut();
 		try!(tokenWriter.out.borrow_mut().write_str("MESSAGE { "));
 		
 		try!(outputString_Level(&lvl, &mut tokenWriter));
 		
-		try!(outputString_optSourceRange(&sourcerange, &mut tokenWriter));
+		try!(outputString_optSourceRange(&opt_sr, &mut tokenWriter));
 		
 		try!(tokenWriter.writeStringToken(msg));
 		
@@ -100,26 +181,6 @@ impl MessagesHandler {
 	}
 }
 
-
-use ::structure_visitor::StructureVisitor;
-
-pub fn writeCrateStructure(codemap : &CodeMap, krate_result : &parse::PResult<Crate>, tokenWriter : &mut TokenWriter) {
-
-	io::stdout().flush().unwrap();
-	
-	let krate = match krate_result {
-		&Err(err) => { 
-			io::stderr().write_fmt(format_args!("Error parsing source: {}\n", err)).unwrap(); 
-			return; 
-		}
-		&Ok(ref ok_krate) => { ok_krate }
-	};
-	
-	let mut visitor : StructureVisitor = StructureVisitor::new(codemap, tokenWriter);  
-	
-	visit::walk_crate(&mut visitor, &krate);
-	
-}
 
 
 /* -----------------  ----------------- */
