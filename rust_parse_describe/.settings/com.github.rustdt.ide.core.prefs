@@ -1,7 +1,0 @@
-build_targets=<?xml version\="1.0" encoding\="UTF-8" standalone\="no"?>\r\n<build_targets xmlns\="com.github.rustdt.ide.core">\r\n<target config\="crate\#no-tests" enabled\="true"/>\r\n<target config\="crate\#tests" enabled\="true"/>\r\n</build_targets>\r\n
-eclipse.preferences.version=1
-prj_auto_build_disabled=true
-racer_path=D\:\\devel\\tools.Rust\\racer-09-16.exe
-sdk_path=D\:\\devel\\tools.Rust\\rust
-sdk_src_path=D\:\\devel\\tools.Rust\\rust\\src
-toolchain_prefs.use_project_settings=false
