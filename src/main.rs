@@ -6,9 +6,22 @@ fn main() {
 		
 	/* -----------------  ----------------- */
 	
-	let source = "struct Foo { } fn func() {  } trait Trait { } ";
+	let source = r#"
+	
+use std::io; 
+
+struct Foo {
+	blah : u32, 
+	xpto : &Str,
+} 
+fn func() { } 
+trait Trait { 
+	fn func(param : Type);
+}
+
+"#;
 	
 	parse_describe::parse_analysis(source);
 	
-	parse_describe::parse_analysis("fn ");
+	parse_describe::parse_analysis("fn foo(");
 }

@@ -16,7 +16,7 @@ use ::util::core::*;
 use ::util::string::*;
 use ::ranges::*;
 
-use ::syntex_syntax::syntax::ast::*;
+use ::syntex_syntax::syntax::ast;
 use ::syntex_syntax::parse::{ self, ParseSess };
 use ::syntex_syntax::visit;
 use ::syntex_syntax::codemap:: { self, Span, CodeMap};
@@ -25,6 +25,7 @@ use ::syntex_syntax::diagnostic:: { self, SpanHandler, Handler, RenderSpan, Leve
 use std::boxed::Box;
 use std::io;
 use std::io::Write;
+use std::path::Path;
 
 use ::token_writer::TokenWriter;
 
@@ -107,10 +108,39 @@ pub fn writeCrateStructureForSource(source : &str, out : Rc<RefCell<fmt::Write>>
 	visit::walk_crate(&mut visitor, &krate);
 }
 
-pub fn parse_crate(source : &str, tokenWriter : Rc<RefCell<TokenWriter>>) -> (parse::PResult<Crate>, CodeMap) {
+
+/* -----------------  ----------------- */
+
+
+use std::ffi::OsStr;
+
+/// A FileLoader that loads any file successfully
+pub struct DummyFileLoader {
+   	modName : &'static OsStr,
+}
+
+impl DummyFileLoader {
+	fn new() -> DummyFileLoader {
+		DummyFileLoader { modName : OsStr::new("mod.rs") } 
+	}
+}
+
+impl codemap::FileLoader for DummyFileLoader {
+    fn file_exists(&self, path: &Path) -> bool {
+    	return path.file_name() == Some(self.modName);
+    }
+	
+    fn read_file(&self, _path: &Path) -> io::Result<String> {
+        Ok(String::new())
+    }
+}
+
+pub fn parse_crate(source : &str, tokenWriter : Rc<RefCell<TokenWriter>>) -> (parse::PResult<ast::Crate>, CodeMap) {
 	let myEmitter = MessagesHandler { tokenWriter : tokenWriter };
 	let handler = Handler::with_emitter(true, Box::new(myEmitter));
-	let spanhandler = SpanHandler::new(handler, CodeMap::new());
+	let fileLoader = Box::new(DummyFileLoader::new());
+	let cm = CodeMap::with_file_loader(fileLoader);
+	let spanhandler = SpanHandler::new(handler, cm);
 	let sess = ParseSess::with_span_handler(spanhandler);
 	
 	let cfg = vec![];

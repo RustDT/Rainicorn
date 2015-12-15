@@ -505,8 +505,8 @@ fn tests_writeStructure() {
 	
 	test_writeStructureElement("const xx : u32 = 1;", r#"Var { "xx" { 1 0 1 19 } }"#);
 	
-	// FIXME need to reenable this case, figure out a way to make it work
-//	test_writeStructureElement("mod myMod   ;  ", r#"Mod { "myMod" { 1 0 1 13 } }"#);
+	
+	test_writeStructureElement("mod myMod   ;  ", r#"Mod { "myMod" { 1 0 1 13 } }"#);
 	test_writeStructureElement("mod myMod { }", r#"Mod { "myMod" { 1 0 1 13 } }"#);
 	test_writeStructureElement("mod myMod { static xx : u32 = 2; }", 
 r#"Mod { "myMod" { 1 0 1 34 }
