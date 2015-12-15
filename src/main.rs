@@ -2,26 +2,17 @@ extern crate rust_parse_describe;
 
 use rust_parse_describe::*;
 
+use std::io::{self, Read};
+
 fn main() {
 		
-	/* -----------------  ----------------- */
+	let mut buffer = String::new();
+	let result = io::stdin().read_to_string(&mut buffer);
 	
-	let source = r#"
+	match result {
+		Err(err) => println!("Error: {}.", err),
+		Ok(_) => parse_describe::parse_analysis_forStdout(&buffer),
+	}
 	
-use std::io; 
-
-struct Foo {
-	blah : u32, 
-	xpto : &Str,
-} 
-fn func() { } 
-trait Trait { 
-	fn func(param : Type);
-}
-
-"#;
-	
-	parse_describe::parse_analysis(source);
-	
-	parse_describe::parse_analysis("fn foo(");
+//	parse_describe::parse_analysis("fn foo(");
 }

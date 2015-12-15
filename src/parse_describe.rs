@@ -23,14 +23,14 @@ use ::syntex_syntax::codemap:: { self, Span, CodeMap};
 use ::syntex_syntax::diagnostic:: { self, SpanHandler, Handler, RenderSpan, Level };
 
 use std::boxed::Box;
-use std::io;
-use std::io::Write;
 use std::path::Path;
 
 use ::token_writer::TokenWriter;
 
 use std::cell::RefCell;
 use std::rc::*;
+use std::io;
+use std::io::Write;
 
 /* ----------------- Model ----------------- */
 
@@ -74,38 +74,48 @@ impl StructureElementKind {
 
 /* -----------------  ----------------- */
 
-use ::structure_visitor::StructureVisitor;
-
-pub fn parse_analysis(source : &str) {
-	
-	let out = Rc::new(RefCell::new(StdoutWrite(io::stdout())));
-	writeCrateStructureForSource(source, out);
+pub fn parse_analysis_forStdout(source : &str) {
+	parse_analysis(source, StdoutWrite(io::stdout())).ok();
+	println!("");
+	io::stdout().flush().ok();
 }
 
-pub fn writeCrateStructureForSource(source : &str, out : Rc<RefCell<fmt::Write>>) {
+
+use ::structure_visitor::StructureVisitor;
+
+pub fn parse_analysis<T : fmt::Write + 'static>(source : &str, out : T) -> Void {
+	let out = Rc::new(RefCell::new(out));
+	parse_analysis_do(source, out)
+}
+
+pub fn parse_analysis_do(source : &str, out : Rc<RefCell<fmt::Write>>) -> Void {
 	
 	let tokenWriter = TokenWriter { out : out };
 	let tokenWriterRc : Rc<RefCell<TokenWriter>> = Rc::new(RefCell::new(tokenWriter));
 	
-	println!("RUST_PARSE_DESCRIBE 0.1");
+	try!(tokenWriterRc.borrow_mut().writeRaw("RUST_PARSE_DESCRIBE 0.1 {\n"));
+	parse_analysis_contents(source, tokenWriterRc.clone());
+	try!(tokenWriterRc.borrow_mut().writeRaw("\n}"));
+	
+	Ok(())
+}
+
+pub fn parse_analysis_contents(source : &str, tokenWriterRc : Rc<RefCell<TokenWriter>>) {
 	
 	let (krate_result, codemap) = parse_crate(source, tokenWriterRc.clone()); 
 	
-	let mut tokenWriter = unwrapRcRefCell(tokenWriterRc);
+	let mut tokenWriter = tokenWriterRc.borrow_mut();
 	
-	io::stdout().flush().unwrap();
-	
-	let krate = match krate_result {
-		Err(err) => { 
-			io::stderr().write_fmt(format_args!("Error parsing source: {}\n", err)).unwrap(); 
-			return; 
+	match krate_result {
+		Err(_err) => {
+			// Error messages should have been written to out
 		}
-		Ok(ref ok_krate) => { ok_krate }
+		Ok(ref krate) => { 
+			let mut visitor : StructureVisitor = StructureVisitor::new(&codemap, &mut tokenWriter);  
+			visit::walk_crate(&mut visitor, &krate);
+		}
 	};
 	
-	let mut visitor : StructureVisitor = StructureVisitor::new(&codemap, &mut tokenWriter);  
-	
-	visit::walk_crate(&mut visitor, &krate);
 }
 
 
@@ -162,6 +172,20 @@ struct MessagesHandler {
 
 unsafe impl ::std::marker::Send for MessagesHandler { } // FIXME: need to review this
 
+impl MessagesHandler {
+	
+	fn writeMessage_handled(&mut self, sourcerange : Option<SourceRange>, msg: &str, lvl: Level) {
+		match self.outputMessage(sourcerange, msg, lvl) {
+    		Ok(_) => {}
+    		Err(err) => {
+    			io::stderr().write_fmt(format_args!("Error serializing compiler message: {}\n", err)).ok();
+    			io::stderr().flush().ok();
+			}
+    	}
+	}
+	
+}
+
 impl diagnostic::Emitter for MessagesHandler {
 	
     fn emit(&mut self, cmsp: Option<(&codemap::CodeMap, Span)>, msg: &str, code: Option<&str>, lvl: Level) {
@@ -170,7 +194,7 @@ impl diagnostic::Emitter for MessagesHandler {
     		None => {}
     		Some(code) => {
     			io::stderr().write_fmt(format_args!("Code: {}\n", code)).unwrap();
-    			panic!("code &str??");
+    			panic!("What is code: Option<&str>??");
 			}
     	}
     	
@@ -180,13 +204,7 @@ impl diagnostic::Emitter for MessagesHandler {
 			None => None,
 		};
 		
-		match self.outputMessage(sourcerange, msg, lvl) {
-    		Ok(_) => {}
-    		Err(err) => {
-    			io::stderr().write_fmt(format_args!("Error serializing compiler message: {}\n", err)).ok();
-    			io::stderr().flush().ok();
-			}
-    	}
+		self.writeMessage_handled(sourcerange, msg, lvl);
     }
     
     fn custom_emit(&mut self, _: &codemap::CodeMap, _: RenderSpan, msg: &str, lvl: Level) {
@@ -194,12 +212,7 @@ impl diagnostic::Emitter for MessagesHandler {
     		return;
     	}
     	
-    	match self.outputMessage(None, msg, lvl) {
-    		Ok(_) => { }
-    		Err(err) => {
-    			io::stderr().write_fmt(format_args!("Error serializing compiler message: {}\n", err)).unwrap();
-			}
-    	}
+    	self.writeMessage_handled(None, msg, lvl);
     }
 	
 }

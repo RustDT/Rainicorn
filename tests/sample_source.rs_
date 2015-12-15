@@ -1,0 +1,10 @@
+use std::io; 
+
+struct Foo {
+	blah : u32, 
+	xpto : &Str,
+} 
+fn func() { } 
+trait Trait { 
+	fn func(param : Type);
+}

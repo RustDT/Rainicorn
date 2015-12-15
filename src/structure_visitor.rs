@@ -490,7 +490,12 @@ fn tests_writeStructure() {
 	
 	fn test_writeStructureElement(source : &str, expected : &str) {
 		let stringRc = Rc::new(RefCell::new(String::new()));
-		parse_describe::writeCrateStructureForSource(source, stringRc.clone());
+		
+		{
+			let tokenWriter = TokenWriter { out : stringRc.clone() };
+			let tokenWriterRc : Rc<RefCell<TokenWriter>> = Rc::new(RefCell::new(tokenWriter));
+			parse_describe::parse_analysis_contents(source, tokenWriterRc.clone());
+		}
 		
 		let result = unwrapRcRefCell(stringRc);
 		let result = result.trim();
