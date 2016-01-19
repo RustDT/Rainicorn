@@ -426,7 +426,8 @@ impl<'v> Visitor<'v> for StructureVisitor<'v> {
 	
 	
 	fn visit_mac(&mut self, _mac: &'v Mac) {
-		panic!("visit_mac disabled by default");
+		//panic!("visit_mac disabled by default");
+		
 		// NB: see note about macros above.
 		// if you really want a visitor that
 		// works on macros, use this
@@ -576,6 +577,9 @@ r#"Impl { "MyTrait" { 1 0 1 75 }
 	
 	
 	test_writeStructureElement("my_macro!(asf); ", "");
+	
+	// test: visit_mac! visit method 
+	test_writeStructureElement("fn foo() { my_macro!(asf); }", r#"Function { "foo" { 1 0 1 28 } }"#);
 	
 	test_writeStructureElement("macro_rules! foo { (x => $e:expr) => (); }", "");
 	
