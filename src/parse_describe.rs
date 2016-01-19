@@ -81,9 +81,11 @@ pub fn parse_analysis_forStdout(source : &str) {
 
 use ::structure_visitor::StructureVisitor;
 
-pub fn parse_analysis<T : fmt::Write + 'static>(source : &str, out : T) -> Void {
-	let out = Rc::new(RefCell::new(out));
-	parse_analysis_do(source, out)
+pub fn parse_analysis<T : fmt::Write + 'static>(source : &str, out : T) -> Result<T> {
+	let outRc = Rc::new(RefCell::new(out));
+	try!(parse_analysis_do(source, outRc.clone()));
+	let res = unwrapRcRefCell(outRc);
+	return Ok(res);
 }
 
 pub fn parse_analysis_do(source : &str, out : Rc<RefCell<fmt::Write>>) -> Void {
@@ -92,15 +94,17 @@ pub fn parse_analysis_do(source : &str, out : Rc<RefCell<fmt::Write>>) -> Void {
 	let tokenWriterRc : Rc<RefCell<TokenWriter>> = Rc::new(RefCell::new(tokenWriter));
 	
 	try!(tokenWriterRc.borrow_mut().writeRaw("RUST_PARSE_DESCRIBE 0.1 {\n"));
-	parse_analysis_contents(source, tokenWriterRc.clone());
+	try!(parse_analysis_contents(source, tokenWriterRc.clone()));
 	try!(tokenWriterRc.borrow_mut().writeRaw("\n}"));
 	
 	Ok(())
 }
 
-pub fn parse_analysis_contents(source : &str, tokenWriterRc : Rc<RefCell<TokenWriter>>) {
+pub fn parse_analysis_contents(source : &str, tokenWriterRc : Rc<RefCell<TokenWriter>>) -> Void {
 	
+	try!(tokenWriterRc.borrow_mut().writeRaw("MESSAGES {\n"));
 	let (krate_result, codemap) = parse_crate(source, tokenWriterRc.clone()); 
+	try!(tokenWriterRc.borrow_mut().writeRaw("}"));
 	
 	let mut tokenWriter = tokenWriterRc.borrow_mut();
 	
@@ -114,6 +118,7 @@ pub fn parse_analysis_contents(source : &str, tokenWriterRc : Rc<RefCell<TokenWr
 		}
 	};
 	
+	Ok(())
 }
 
 

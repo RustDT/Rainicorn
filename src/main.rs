@@ -14,5 +14,4 @@ fn main() {
 		Ok(_) => parse_describe::parse_analysis_forStdout(&buffer),
 	}
 	
-//	parse_describe::parse_analysis("fn foo(");
 }

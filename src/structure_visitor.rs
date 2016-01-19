@@ -494,13 +494,16 @@ fn tests_writeStructure() {
 		{
 			let tokenWriter = TokenWriter { out : stringRc.clone() };
 			let tokenWriterRc : Rc<RefCell<TokenWriter>> = Rc::new(RefCell::new(tokenWriter));
-			parse_describe::parse_analysis_contents(source, tokenWriterRc.clone());
+			parse_describe::parse_analysis_contents(source, tokenWriterRc.clone()).ok().unwrap();
 		}
+		
+		let expected : &str = &(String::from("MESSAGES {\n}") + 
+			if expected.is_empty() { "" } else { "\n" } + expected);
 		
 		let result = unwrapRcRefCell(stringRc);
 		let result = result.trim();
 		if !expected.eq(result) {
-			println!("{}",expected);
+			println!("{}", expected);
 			println!("{}", result);
 		}
 		assert_eq!(result, expected);

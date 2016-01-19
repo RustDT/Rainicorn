@@ -26,8 +26,8 @@ trait Trait {
 ```
 sample output:
 ```
-RUST_PARSE_DESCRIBE 0.1
-
+RUST_PARSE_DESCRIBE 0.1 {
+MESSAGES { }
 Use { "std::io" { 3 0 3 12 } }
 Struct { "Foo" { 5 0 8 1 }
   Var { "blah" { 6 1 6 11 } }
@@ -36,6 +36,8 @@ Struct { "Foo" { 5 0 8 1 }
 Function { "func" { 9 0 9 13 } }
 Trait { "Trait" { 10 0 12 1 }
   Function { "func" { 11 1 11 23 } }
+}
+
 }
 ```
 --
@@ -46,8 +48,11 @@ fn foo(
 ```
 sample output:
 ```
-RUST_PARSE_DESCRIBE 0.1
-MESSAGE { help { 1 6 1 7 } "did you mean to close this delimiter?" }
-MESSAGE { error { 1 7 1 7 } "this file contains an un-closed delimiter " }
+RUST_PARSE_DESCRIBE 0.1 {
+MESSAGES { 
+  MESSAGE { help { 1 6 1 7 } "did you mean to close this delimiter?" }
+  MESSAGE { error { 1 7 1 7 } "this file contains an un-closed delimiter " }
+}
+}
 ```
 
