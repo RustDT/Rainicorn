@@ -269,7 +269,7 @@ impl<'v> Visitor<'v> for StructureVisitor<'v> {
 	}
 	
 	fn visit_variant_data(&mut self, s: &'v VariantData, ident: Ident, _: &'v Generics, _: NodeId, span: Span) {
-		let mut kind = StructureElementKind::EnumElem;
+		let mut kind = StructureElementKind::EnumVariant;
 		if self.parentIsStruct {
 			kind = StructureElementKind::Struct;
 			self.parentIsStruct = false;
@@ -525,13 +525,13 @@ r#"Mod { "myMod" { 1 0 1 34 }
 	
 	test_writeStructureElement("enum MyEnum { Alpha, Beta, } ", 
 r#"Enum { "MyEnum" { 1 0 1 28 }
-  EnumElem { "Alpha" { 1 14 1 19 } }
-  EnumElem { "Beta" { 1 21 1 25 } }
+  EnumVariant { "Alpha" { 1 14 1 19 } }
+  EnumVariant { "Beta" { 1 21 1 25 } }
 }"#);
 	test_writeStructureElement("enum MyEnum<T, U> { Alpha(T), Beta(U), } ", 
 r#"Enum { "MyEnum" { 1 0 1 40 }
-  EnumElem { "Alpha" { 1 20 1 28 } }
-  EnumElem { "Beta" { 1 30 1 37 } }
+  EnumVariant { "Alpha" { 1 20 1 28 } }
+  EnumVariant { "Beta" { 1 30 1 37 } }
 }"#);
 	
 	

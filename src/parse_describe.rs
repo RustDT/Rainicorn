@@ -35,17 +35,16 @@ use std::io::Write;
 /* ----------------- Model ----------------- */
 
 pub enum StructureElementKind {
-	File,
-	ExternCrate,
 	Var,
-	Mod,
-	Use,
 	Function,
 	Struct,
 	Impl,
 	Trait,
 	Enum,
-	EnumElem,
+	EnumVariant,
+	ExternCrate,
+	Mod,
+	Use,
 	TypeAlias,
 }
 
@@ -55,17 +54,16 @@ use std::fmt;
 impl StructureElementKind {
 	pub fn writeString(&self, out : &mut fmt::Write) -> fmt::Result {
 		match *self {
-			StructureElementKind::File => out.write_str("File"),
-			StructureElementKind::ExternCrate => out.write_str("ExternCrate"),
 			StructureElementKind::Var => out.write_str("Var"),
-			StructureElementKind::Mod => out.write_str("Mod"),
-			StructureElementKind::Use => out.write_str("Use"),
 			StructureElementKind::Function => out.write_str("Function"),
 			StructureElementKind::Struct => out.write_str("Struct"),
 			StructureElementKind::Impl => out.write_str("Impl"),
 			StructureElementKind::Trait => out.write_str("Trait"),
 			StructureElementKind::Enum => out.write_str("Enum"),
-			StructureElementKind::EnumElem => out.write_str("EnumElem"),
+			StructureElementKind::EnumVariant => out.write_str("EnumVariant"),
+			StructureElementKind::ExternCrate => out.write_str("ExternCrate"),
+			StructureElementKind::Mod => out.write_str("Mod"),
+			StructureElementKind::Use => out.write_str("Use"),
 			StructureElementKind::TypeAlias => out.write_str("TypeAlias"),
 		}
 	}
