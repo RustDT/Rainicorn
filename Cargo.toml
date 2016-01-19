@@ -3,7 +3,7 @@ name = "rust_parse_describe"
 version = "0.0.1"
 
 [dependencies]
-syntex_syntax = "*"
+syntex_syntax = "0.26.0"
 
 [[bin]]
 name = "rust_parse_describe_lib"

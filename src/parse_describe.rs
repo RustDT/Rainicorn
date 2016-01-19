@@ -20,7 +20,7 @@ use ::syntex_syntax::syntax::ast;
 use ::syntex_syntax::parse::{ self, ParseSess };
 use ::syntex_syntax::visit;
 use ::syntex_syntax::codemap:: { self, Span, CodeMap};
-use ::syntex_syntax::diagnostic:: { self, SpanHandler, Handler, RenderSpan, Level };
+use ::syntex_syntax::errors:: { Handler, RenderSpan, Level, emitter };
 
 use std::boxed::Box;
 use std::path::Path;
@@ -102,8 +102,15 @@ pub fn parse_analysis_do(source : &str, out : Rc<RefCell<fmt::Write>>) -> Void {
 
 pub fn parse_analysis_contents(source : &str, tokenWriterRc : Rc<RefCell<TokenWriter>>) -> Void {
 	
+	let fileLoader = Box::new(DummyFileLoader::new());
+	let codemap = Rc::new(CodeMap::with_file_loader(fileLoader));
+	
+	let myEmitter = MessagesHandler { tokenWriter : tokenWriterRc.clone() , codemap : codemap.clone()};
+	let handler = Handler::with_emitter(true, true , Box::new(myEmitter));
+	let sess = ParseSess::with_span_handler(handler, codemap.clone());
+	
 	try!(tokenWriterRc.borrow_mut().writeRaw("MESSAGES {\n"));
-	let (krate_result, codemap) = parse_crate(source, tokenWriterRc.clone()); 
+	let krate_result = parse_crate(source, &sess);
 	try!(tokenWriterRc.borrow_mut().writeRaw("}"));
 	
 	let mut tokenWriter = tokenWriterRc.borrow_mut();
@@ -148,28 +155,18 @@ impl codemap::FileLoader for DummyFileLoader {
     }
 }
 
-pub fn parse_crate(source : &str, tokenWriter : Rc<RefCell<TokenWriter>>) -> (parse::PResult<ast::Crate>, CodeMap) {
-	let myEmitter = MessagesHandler { tokenWriter : tokenWriter };
-	let handler = Handler::with_emitter(true, Box::new(myEmitter));
-	let fileLoader = Box::new(DummyFileLoader::new());
-	let cm = CodeMap::with_file_loader(fileLoader);
-	let spanhandler = SpanHandler::new(handler, cm);
-	let sess = ParseSess::with_span_handler(spanhandler);
-	
+pub fn parse_crate<'a>(source : &str, sess : &'a ParseSess) -> parse::PResult<'a, ast::Crate> 
+{
 	let cfg = vec![];
-	
 	let krateName = "_file_module_".to_string();
 	
-	let krate_result = 
-		parse::new_parser_from_source_str(&sess, cfg, krateName, source.to_string())
-		.parse_crate_mod();
-	
-	return (krate_result, sess.span_diagnostic.cm);
+	return parse::new_parser_from_source_str(&sess, cfg, krateName, source.to_string()).parse_crate_mod();
 }
 
 
 struct MessagesHandler {
 	tokenWriter: Rc<RefCell<TokenWriter>>,
+	codemap : Rc<CodeMap>,
 }
 
 
@@ -189,9 +186,9 @@ impl MessagesHandler {
 	
 }
 
-impl diagnostic::Emitter for MessagesHandler {
+impl emitter::Emitter for MessagesHandler {
 	
-    fn emit(&mut self, cmsp: Option<(&codemap::CodeMap, Span)>, msg: &str, code: Option<&str>, lvl: Level) {
+    fn emit(&mut self, cmsp: Option<Span>, msg: &str, code: Option<&str>, lvl: Level) {
     	
     	match code {
     		None => {}
@@ -203,14 +200,14 @@ impl diagnostic::Emitter for MessagesHandler {
     	
     	
 		let sourcerange = match cmsp {
-			Some((codemap, span)) => Some(SourceRange::new(codemap, span)),
+			Some(span) => Some(SourceRange::new(&self.codemap, span)),
 			None => None,
 		};
 		
 		self.writeMessage_handled(sourcerange, msg, lvl);
     }
     
-    fn custom_emit(&mut self, _: &codemap::CodeMap, _: RenderSpan, msg: &str, lvl: Level) {
+    fn custom_emit(&mut self, _: RenderSpan, msg: &str, lvl: Level) {
     	if match lvl { Level::Help | Level::Note => true, _ => false } {
     		return;
     	}
@@ -249,6 +246,7 @@ impl MessagesHandler {
 pub fn outputString_Level(lvl : &Level, writer : &mut TokenWriter) -> Void {
 	let str = match *lvl {
 		Level::Bug => panic!("Bug parsing error code"),
+		Level::Cancelled => "cancelled",
 		Level::Fatal => "error",
 		Level::Error => "error",
 		Level::Warning => "warning",
