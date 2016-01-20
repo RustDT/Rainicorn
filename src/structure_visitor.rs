@@ -12,13 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+
 //!
 //! Write a parse structure into a TokenWriter
 //! 
-	
+
 use ::util::core::*;
 use ::util::string::*;
-use ::ranges::*;
+use ::source_model::*;
 
 use ::syntex_syntax::visit::*;
 use ::syntex_syntax::ast::*;
@@ -566,7 +567,7 @@ r#"Impl { "MyTrait" { 1 0 1 75 }
   Var { "foo" { 1 54 1 73 } }
 }"#);	
 	
-
+	
 	test_writeStructureElement("use blah;", r#"Use { "blah" { 1 0 1 9 } }"#);
 	test_writeStructureElement("use blah as foo;", r#"Use { "blah as foo" { 1 0 1 16 } }"#);
 	// TODO: this is not printing the global path prefix, seems to be a limitation from libsyntax?

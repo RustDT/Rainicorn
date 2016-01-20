@@ -14,7 +14,7 @@
 
 use ::util::core::*;
 use ::util::string::*;
-use ::ranges::*;
+use ::source_model::*;
 
 use ::syntex_syntax::syntax::ast;
 use ::syntex_syntax::parse::{ self, ParseSess };
@@ -105,12 +105,17 @@ pub fn parse_analysis_contents(source : &str, tokenWriterRc : Rc<RefCell<TokenWr
 	let fileLoader = Box::new(DummyFileLoader::new());
 	let codemap = Rc::new(CodeMap::with_file_loader(fileLoader));
 	
-	let myEmitter = MessagesHandler { tokenWriter : tokenWriterRc.clone() , codemap : codemap.clone()};
+	let myEmitter = MessagesHandler::new(codemap.clone());
+	let messages = myEmitter.messages.clone();
 	let handler = Handler::with_emitter(true, true , Box::new(myEmitter));
 	let sess = ParseSess::with_span_handler(handler, codemap.clone());
 	
-	try!(tokenWriterRc.borrow_mut().writeRaw("MESSAGES {\n"));
 	let krate_result = parse_crate(source, &sess);
+	
+	try!(tokenWriterRc.borrow_mut().writeRaw("MESSAGES {\n"));
+	for msg in &messages.lock().unwrap() as &Vec<SourceMessage> {
+		try!(output_message(&mut tokenWriterRc.borrow_mut(), msg.sourcerange, &msg.message, &msg.status_level));
+	}
 	try!(tokenWriterRc.borrow_mut().writeRaw("}"));
 	
 	let mut tokenWriter = tokenWriterRc.borrow_mut();
@@ -165,23 +170,29 @@ pub fn parse_crate<'a>(source : &str, sess : &'a ParseSess) -> parse::PResult<'a
 
 
 struct MessagesHandler {
-	tokenWriter: Rc<RefCell<TokenWriter>>,
 	codemap : Rc<CodeMap>,
+	messages : Arc<Mutex<Vec<SourceMessage>>>,
 }
+
+use std::sync::{ Arc, Mutex };
 
 
 unsafe impl ::std::marker::Send for MessagesHandler { } // FIXME: need to review this
 
 impl MessagesHandler {
 	
-	fn writeMessage_handled(&mut self, sourcerange : Option<SourceRange>, msg: &str, lvl: Level) {
-		match self.outputMessage(sourcerange, msg, lvl) {
-    		Ok(_) => {}
-    		Err(err) => {
-    			io::stderr().write_fmt(format_args!("Error serializing compiler message: {}\n", err)).ok();
-    			io::stderr().flush().ok();
-			}
-    	}
+	fn new(codemap : Rc<CodeMap>, ) -> MessagesHandler {
+		MessagesHandler { codemap : codemap, messages : Arc::new(Mutex::new(vec![])) }
+	}
+	
+	fn writeMessage_handled(&mut self, sourcerange : Option<SourceRange>, msg: &str, lvl: StatusLevel) {
+		
+		let msg = SourceMessage{ status_level : lvl , sourcerange : sourcerange,  message : String::from(msg) };
+		
+		let mut messages = self.messages.lock().unwrap();
+		
+		messages.push(msg);
+		
 	}
 	
 }
@@ -204,7 +215,7 @@ impl emitter::Emitter for MessagesHandler {
 			None => None,
 		};
 		
-		self.writeMessage_handled(sourcerange, msg, lvl);
+		self.writeMessage_handled(sourcerange, msg, level_to_status_level(lvl));
     }
     
     fn custom_emit(&mut self, _: RenderSpan, msg: &str, lvl: Level) {
@@ -212,50 +223,50 @@ impl emitter::Emitter for MessagesHandler {
     		return;
     	}
     	
-    	self.writeMessage_handled(None, msg, lvl);
+    	self.writeMessage_handled(None, msg, level_to_status_level(lvl));
     }
 	
 }
 
-impl MessagesHandler {
-	
-	fn outputMessage(&mut self, opt_sr : Option<SourceRange>, msg: &str, lvl: Level) 
-		-> Void
-	{
-		
-		let mut tokenWriter = &mut self.tokenWriter.borrow_mut();
-		try!(tokenWriter.out.borrow_mut().write_str("MESSAGE { "));
-		
-		try!(outputString_Level(&lvl, &mut tokenWriter));
-		
-		try!(outputString_optSourceRange(&opt_sr, &mut tokenWriter));
-		
-		try!(tokenWriter.writeStringToken(msg));
-		
-		try!(tokenWriter.out.borrow_mut().write_str("}\n"));
-		
-		Ok(())
+fn level_to_status_level(lvl: Level) -> StatusLevel {
+	match lvl { 
+		/* FIXME: crash whole program */
+		Level::Bug => panic!("StatusLevel : BUG"), 
+		Level::Cancelled => panic!("StatusLevel : CANCELLED"),
+		Level::Help | Level::Note => StatusLevel::OK, 
+		Level::Warning => StatusLevel::WARNING,
+		Level::Error | Level::Fatal => StatusLevel::ERROR,
 	}
 }
 
+impl MessagesHandler {
+}
 
 
 /* -----------------  ----------------- */
 
-
-pub fn outputString_Level(lvl : &Level, writer : &mut TokenWriter) -> Void {
-	let str = match *lvl {
-		Level::Bug => panic!("Bug parsing error code"),
-		Level::Cancelled => "cancelled",
-		Level::Fatal => "error",
-		Level::Error => "error",
-		Level::Warning => "warning",
-		Level::Note => "note",
-		Level::Help => "help",
-	};
+fn output_message(tokenWriter: &mut TokenWriter, opt_sr : Option<SourceRange>, msg: & str, lvl: &StatusLevel) 
+	-> Void
+{
 	
-	try!(writer.out.borrow_mut().write_str(str));
-	try!(writer.out.borrow_mut().write_str(" "));
+	try!(tokenWriter.out.borrow_mut().write_str("MESSAGE { "));
+	
+	try!(outputString_Level(&lvl, tokenWriter));
+	
+	try!(outputString_optSourceRange(&opt_sr, tokenWriter));
+	
+	try!(tokenWriter.writeStringToken(msg));
+	
+	try!(tokenWriter.out.borrow_mut().write_str("}\n"));
+	
+	Ok(())
+}
+
+
+pub fn outputString_Level(lvl : &StatusLevel, writer : &mut TokenWriter) -> Void {
+	
+	try!(lvl.output_string(&mut *writer.out.borrow_mut()));
+	try!(writer.writeRaw(" "));
 	
 	Ok(())
 }
