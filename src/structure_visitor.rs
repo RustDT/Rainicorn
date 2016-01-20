@@ -480,7 +480,7 @@ fn tests_writeStructureElement() {
 	}
 	
 	test_writeStructureElement("blah", StructureElementKind::Var, &sourceRange(1, 0, 2, 5), 
-		r#"Var { "blah" { 1 0 2 5 } }"#);
+		r#"Var { "blah" { 0:0 1:5 } }"#);
 }
 
 #[test]
@@ -511,88 +511,88 @@ fn tests_writeStructure() {
 		assert_eq!(result, expected);
 	}
 	
-	test_writeStructureElement("extern crate xx;", r#"ExternCrate { "xx" { 1 0 1 16 } }"#);
+	test_writeStructureElement("extern crate xx;", r#"ExternCrate { "xx" { 0:0 0:16 } }"#);
 	
-	test_writeStructureElement("const xx : u32 = 1;", r#"Var { "xx" { 1 0 1 19 } }"#);
+	test_writeStructureElement("const xx : u32 = 1;", r#"Var { "xx" { 0:0 0:19 } }"#);
 	
 	
-	test_writeStructureElement("mod myMod   ;  ", r#"Mod { "myMod" { 1 0 1 13 } }"#);
-	test_writeStructureElement("mod myMod { }", r#"Mod { "myMod" { 1 0 1 13 } }"#);
+	test_writeStructureElement("mod myMod   ;  ", r#"Mod { "myMod" { 0:0 0:13 } }"#);
+	test_writeStructureElement("mod myMod { }", r#"Mod { "myMod" { 0:0 0:13 } }"#);
 	test_writeStructureElement("mod myMod { static xx : u32 = 2; }", 
-r#"Mod { "myMod" { 1 0 1 34 }
-  Var { "xx" { 1 12 1 32 } }
+r#"Mod { "myMod" { 0:0 0:34 }
+  Var { "xx" { 0:12 0:32 } }
 }"#
 	);
 	
-	test_writeStructureElement("fn xx(a : &str) -> u32 { }", r#"Function { "xx" { 1 0 1 26 } }"#);
+	test_writeStructureElement("fn xx(a : &str) -> u32 { }", r#"Function { "xx" { 0:0 0:26 } }"#);
 	
-	test_writeStructureElement("type MyType = &u32<asd>;", r#"TypeAlias { "MyType" { 1 0 1 24 } }"#);
+	test_writeStructureElement("type MyType = &u32<asd>;", r#"TypeAlias { "MyType" { 0:0 0:24 } }"#);
 	
 	test_writeStructureElement("enum MyEnum { Alpha, Beta, } ", 
-r#"Enum { "MyEnum" { 1 0 1 28 }
-  EnumVariant { "Alpha" { 1 14 1 19 } }
-  EnumVariant { "Beta" { 1 21 1 25 } }
+r#"Enum { "MyEnum" { 0:0 0:28 }
+  EnumVariant { "Alpha" { 0:14 0:19 } }
+  EnumVariant { "Beta" { 0:21 0:25 } }
 }"#);
 	test_writeStructureElement("enum MyEnum<T, U> { Alpha(T), Beta(U), } ", 
-r#"Enum { "MyEnum" { 1 0 1 40 }
-  EnumVariant { "Alpha" { 1 20 1 28 } }
-  EnumVariant { "Beta" { 1 30 1 37 } }
+r#"Enum { "MyEnum" { 0:0 0:40 }
+  EnumVariant { "Alpha" { 0:20 0:28 } }
+  EnumVariant { "Beta" { 0:30 0:37 } }
 }"#);
 	
 	
-	test_writeStructureElement("struct MyStruct ( u32, blah<sdf> ); ", r#"Struct { "MyStruct" { 1 0 1 35 } }"#);
+	test_writeStructureElement("struct MyStruct ( u32, blah<sdf> ); ", r#"Struct { "MyStruct" { 0:0 0:35 } }"#);
 	test_writeStructureElement("struct MyStruct { foo : u32, } ", 
-r#"Struct { "MyStruct" { 1 0 1 30 }
-  Var { "foo" { 1 18 1 27 } }
+r#"Struct { "MyStruct" { 0:0 0:30 }
+  Var { "foo" { 0:18 0:27 } }
 }"#);
 	
-	test_writeStructureElement("trait MyTrait { } ", r#"Trait { "MyTrait" { 1 0 1 17 } }"#);
+	test_writeStructureElement("trait MyTrait { } ", r#"Trait { "MyTrait" { 0:0 0:17 } }"#);
 	test_writeStructureElement("trait MyTrait : Foo { fn xxx(); } ", 
-r#"Trait { "MyTrait" { 1 0 1 33 }
-  Function { "xxx" { 1 22 1 31 } }
+r#"Trait { "MyTrait" { 0:0 0:33 }
+  Function { "xxx" { 0:22 0:31 } }
 }"#);
 	test_writeStructureElement("trait MyTrait : Foo { type N: fmt::Display; fn xxx(); const foo :u32 = 3; } ", 
-r#"Trait { "MyTrait" { 1 0 1 75 }
-  TypeAlias { "N" { 1 22 1 43 } }
-  Function { "xxx" { 1 44 1 53 } }
-  Var { "foo" { 1 54 1 73 } }
+r#"Trait { "MyTrait" { 0:0 0:75 }
+  TypeAlias { "N" { 0:22 0:43 } }
+  Function { "xxx" { 0:44 0:53 } }
+  Var { "foo" { 0:54 0:73 } }
 }"#);
 	
-	test_writeStructureElement("impl MyType { } ", r#"Impl { "MyType" { 1 0 1 15 } }"#);
-	test_writeStructureElement("impl MyTrait for MyType { } ", r#"Impl { "MyType.MyTrait" { 1 0 1 27 } }"#);
+	test_writeStructureElement("impl MyType { } ", r#"Impl { "MyType" { 0:0 0:15 } }"#);
+	test_writeStructureElement("impl MyTrait for MyType { } ", r#"Impl { "MyType.MyTrait" { 0:0 0:27 } }"#);
 	test_writeStructureElement("impl  MyTrait       { type N= fmt::Display; fn xx(){} const foo :u32 = 3; } ", 
-r#"Impl { "MyTrait" { 1 0 1 75 }
-  TypeAlias { "N" { 1 22 1 43 } }
-  Function { "xx" { 1 44 1 53 } }
-  Var { "foo" { 1 54 1 73 } }
+r#"Impl { "MyTrait" { 0:0 0:75 }
+  TypeAlias { "N" { 0:22 0:43 } }
+  Function { "xx" { 0:44 0:53 } }
+  Var { "foo" { 0:54 0:73 } }
 }"#);	
 	
 	
-	test_writeStructureElement("use blah;", r#"Use { "blah" { 1 0 1 9 } }"#);
-	test_writeStructureElement("use blah as foo;", r#"Use { "blah as foo" { 1 0 1 16 } }"#);
+	test_writeStructureElement("use blah;", r#"Use { "blah" { 0:0 0:9 } }"#);
+	test_writeStructureElement("use blah as foo;", r#"Use { "blah as foo" { 0:0 0:16 } }"#);
 	// TODO: this is not printing the global path prefix, seems to be a limitation from libsyntax?
-	test_writeStructureElement("use ::blah::foo as myfoo;", r#"Use { "blah::foo as myfoo" { 1 0 1 25 } }"#);
-	test_writeStructureElement("use ::blah::foo::*;", r#"Use { "blah::foo::*" { 1 0 1 19 } }"#);
+	test_writeStructureElement("use ::blah::foo as myfoo;", r#"Use { "blah::foo as myfoo" { 0:0 0:25 } }"#);
+	test_writeStructureElement("use ::blah::foo::*;", r#"Use { "blah::foo::*" { 0:0 0:19 } }"#);
 	test_writeStructureElement("use blah::foo:: { One as OtherOne, self as Two };", 
-		r#"Use { "blah::foo::{ One as OtherOne, self as Two, }" { 1 0 1 49 } }"#);
+		r#"Use { "blah::foo::{ One as OtherOne, self as Two, }" { 0:0 0:49 } }"#);
 	
 	
 	test_writeStructureElement("my_macro!(asf); ", "");
 	
 	// test: visit_mac! visit method 
-	test_writeStructureElement("fn foo() { my_macro!(asf); }", r#"Function { "foo" { 1 0 1 28 } }"#);
+	test_writeStructureElement("fn foo() { my_macro!(asf); }", r#"Function { "foo" { 0:0 0:28 } }"#);
 	
 	test_writeStructureElement("macro_rules! foo { (x => $e:expr) => (); }", "");
 	
 	
 	test_writeStructureElement("extern { fn ext(p : u32); }", 
-r#"Mod { "" { 1 0 1 27 }
-  Function { "ext" { 1 9 1 25 } }
+r#"Mod { "" { 0:0 0:27 }
+  Function { "ext" { 0:9 0:25 } }
 }"#);
 	test_writeStructureElement("extern { fn ext(p : u32); \n static extVar: u8; }", 
-r#"Mod { "" { 1 0 2 21 }
-  Function { "ext" { 1 9 1 25 } }
-  Var { "extVar" { 2 1 2 19 } }
+r#"Mod { "" { 0:0 1:21 }
+  Function { "ext" { 0:9 0:25 } }
+  Var { "extVar" { 1:1 1:19 } }
 }"#);
 	
 	// Test with a lexer error, FIXME
