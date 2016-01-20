@@ -27,17 +27,17 @@ trait Trait {
 sample output:
 ```
 RUST_PARSE_DESCRIBE 0.1 {
-MESSAGES { }
-Use { "std::io" { 3 0 3 12 } }
-Struct { "Foo" { 5 0 8 1 }
-  Var { "blah" { 6 1 6 11 } }
-  Var { "xpto" { 7 1 7 12 } }
+MESSAGES {
 }
-Function { "func" { 9 0 9 13 } }
-Trait { "Trait" { 10 0 12 1 }
-  Function { "func" { 11 1 11 23 } }
+Use { "std::io" { 0:0 0:12 } }
+Struct { "Foo" { 2:0 5:1 }
+  Var { "blah" { 3:1 3:11 } }
+  Var { "xpto" { 4:1 4:12 } }
 }
-
+Function { "func" { 6:0 6:13 } }
+Trait { "Trait" { 7:0 9:1 }
+  Function { "func" { 8:1 8:23 } }
+}
 }
 ```
 --
@@ -45,13 +45,14 @@ Trait { "Trait" { 10 0 12 1 }
 Sample input:
 ```
 fn foo(
+  blah
 ```
 sample output:
 ```
 RUST_PARSE_DESCRIBE 0.1 {
 MESSAGES { 
-  MESSAGE { help { 1 6 1 7 } "did you mean to close this delimiter?" }
-  MESSAGE { error { 1 7 1 7 } "this file contains an un-closed delimiter " }
+  { ERROR { 1:6 1:6 } "this file contains an un-closed delimiter" }
+  { INFO { 0:6 0:7 } "did you mean to close this delimiter?" }
 }
 }
 ```

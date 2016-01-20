@@ -71,9 +71,9 @@ impl StatusLevel {
 	
 	pub fn output_string(&self, writer : &mut fmt::Write) -> Void {
 		let str = match *self {
-			StatusLevel::ERROR => "error",
-			StatusLevel::WARNING => "warning",
-			StatusLevel::OK => "info",
+			StatusLevel::ERROR => "ERROR",
+			StatusLevel::WARNING => "WARNING",
+			StatusLevel::OK => "INFO",
 		};
 		
 		try!(writer.write_str(str)); 

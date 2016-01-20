@@ -7,7 +7,11 @@ use rust_parse_describe::parse_describe::*;
 fn parse_analysis_tests() {
 	test_parse_analysis("", "");
 	
-//	test_parse_analysis("fn foo(", "{ ERROR 1:0 1:0");
+	test_parse_analysis(" #blah ", r#"{ ERROR { 0:2 0:6 } "expected `[`, found `blah`" }"#);
+	
+	test_parse_analysis("fn foo(\n  blah", r#"
+{ ERROR { 1:6 1:6 } "this file contains an un-closed delimiter" }
+{ INFO { 0:6 0:7 } "did you mean to close this delimiter?" }"#);
 }
 
 fn test_parse_analysis(source : &str, expected_msgs : &str) {
@@ -17,7 +21,7 @@ fn test_parse_analysis(source : &str, expected_msgs : &str) {
 	result = assert_surrounding_string("RUST_PARSE_DESCRIBE 0.1 {", result, "}");
 	
 	result = assert_starts_with("MESSAGES {", result.trim());
-	result = assert_starts_with(expected_msgs, result.trim());
+	result = assert_starts_with(expected_msgs.trim(), result.trim());
 	result = assert_starts_with("}", result.trim());
 	
 	assert_eq!(result, "");

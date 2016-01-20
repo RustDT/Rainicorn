@@ -110,25 +110,24 @@ pub fn parse_analysis_contents(source : &str, tokenWriterRc : Rc<RefCell<TokenWr
 	let handler = Handler::with_emitter(true, true , Box::new(myEmitter));
 	let sess = ParseSess::with_span_handler(handler, codemap.clone());
 	
-	let krate_result = parse_crate(source, &sess);
-	
-	try!(tokenWriterRc.borrow_mut().writeRaw("MESSAGES {\n"));
-	for msg in &messages.lock().unwrap() as &Vec<SourceMessage> {
-		try!(output_message(&mut tokenWriterRc.borrow_mut(), msg.sourcerange, &msg.message, &msg.status_level));
-	}
-	try!(tokenWriterRc.borrow_mut().writeRaw("}"));
+	let mut krate_result = parse_crate(source, &sess);
 	
 	let mut tokenWriter = tokenWriterRc.borrow_mut();
 	
-	match krate_result {
-		Err(_err) => {
-			// Error messages should have been written to out
-		}
-		Ok(ref krate) => { 
-			let mut visitor : StructureVisitor = StructureVisitor::new(&codemap, &mut tokenWriter);  
-			visit::walk_crate(&mut visitor, &krate);
-		}
-	};
+	if let &mut Err(ref mut db) = &mut krate_result {
+		db.emit();
+	}
+	
+	try!(tokenWriter.writeRaw("MESSAGES {\n"));
+	for msg in &messages.lock().unwrap() as &Vec<SourceMessage> {
+		try!(output_message(&mut tokenWriter, msg.sourcerange, &msg.message, &msg.status_level));
+	}
+	try!(tokenWriter.writeRaw("}"));
+	
+	if let Ok(krate) = krate_result {
+		let mut visitor : StructureVisitor = StructureVisitor::new(&codemap, &mut tokenWriter);  
+		visit::walk_crate(&mut visitor, &krate);
+	}
 	
 	Ok(())
 }
@@ -162,10 +161,29 @@ impl codemap::FileLoader for DummyFileLoader {
 
 pub fn parse_crate<'a>(source : &str, sess : &'a ParseSess) -> parse::PResult<'a, ast::Crate> 
 {
-	let cfg = vec![];
-	let krateName = "_file_module_".to_string();
+	let source = source.to_string();
 	
-	return parse::new_parser_from_source_str(&sess, cfg, krateName, source.to_string()).parse_crate_mod();
+	let cfg = vec![];
+	let name = "_file_module_".to_string();
+	
+//	We inlined: let mut parser = parse::new_parser_from_source_str(&sess, cfg, name, source); 
+
+	let filemap = sess.codemap().new_filemap(name, source);
+	
+	// filemap_to_tts but without a panic
+	let tts =
+	{
+	    let cfg = Vec::new();
+	    let srdr = parse::lexer::StringReader::new(&sess.span_diagnostic, filemap);
+	    let mut p1 = parse::parser::Parser::new(sess, cfg, Box::new(srdr));
+	    
+	    try!(p1.parse_all_token_trees())
+	};
+	
+    let trdr = parse::lexer::new_tt_reader(&sess.span_diagnostic, None, None, tts);
+    let mut parser = parse::parser::Parser::new(sess, cfg, Box::new(trdr));
+	
+	return parser.parse_crate_mod();
 }
 
 
@@ -199,18 +217,14 @@ impl MessagesHandler {
 
 impl emitter::Emitter for MessagesHandler {
 	
-    fn emit(&mut self, cmsp: Option<Span>, msg: &str, code: Option<&str>, lvl: Level) {
+    fn emit(&mut self, span: Option<Span>, msg: &str, code: Option<&str>, lvl: Level) {
     	
-    	match code {
-    		None => {}
-    		Some(code) => {
-    			io::stderr().write_fmt(format_args!("Code: {}\n", code)).unwrap();
-    			panic!("What is code: Option<&str>??");
-			}
+    	if let Some(code) = code {
+   			io::stderr().write_fmt(format_args!("Code: {}\n", code)).unwrap();
+   			panic!("What is code: Option<&str>??");
     	}
     	
-    	
-		let sourcerange = match cmsp {
+		let sourcerange = match span {
 			Some(span) => Some(SourceRange::new(&self.codemap, span)),
 			None => None,
 		};
@@ -219,9 +233,7 @@ impl emitter::Emitter for MessagesHandler {
     }
     
     fn custom_emit(&mut self, _: RenderSpan, msg: &str, lvl: Level) {
-    	if match lvl { Level::Help | Level::Note => true, _ => false } {
-    		return;
-    	}
+    	match lvl { Level::Help | Level::Note => return, _ => () }
     	
     	self.writeMessage_handled(None, msg, level_to_status_level(lvl));
     }
@@ -230,7 +242,6 @@ impl emitter::Emitter for MessagesHandler {
 
 fn level_to_status_level(lvl: Level) -> StatusLevel {
 	match lvl { 
-		/* FIXME: crash whole program */
 		Level::Bug => panic!("StatusLevel : BUG"), 
 		Level::Cancelled => panic!("StatusLevel : CANCELLED"),
 		Level::Help | Level::Note => StatusLevel::OK, 
@@ -249,7 +260,7 @@ fn output_message(tokenWriter: &mut TokenWriter, opt_sr : Option<SourceRange>, m
 	-> Void
 {
 	
-	try!(tokenWriter.out.borrow_mut().write_str("MESSAGE { "));
+	try!(tokenWriter.out.borrow_mut().write_str("{ "));
 	
 	try!(outputString_Level(&lvl, tokenWriter));
 	
@@ -273,9 +284,9 @@ pub fn outputString_Level(lvl : &StatusLevel, writer : &mut TokenWriter) -> Void
 
 pub fn outputString_SourceRange(sr : &SourceRange, writer : &mut TokenWriter) -> Void {
 	let mut out = writer.out.borrow_mut(); 
-	try!(out.write_fmt(format_args!("{{ {} {} {} {} }}", 
-		sr.start_pos.line, sr.start_pos.col.0,
-		sr.end_pos.line, sr.end_pos.col.0,
+	try!(out.write_fmt(format_args!("{{ {}:{} {}:{} }}", 
+		sr.start_pos.line-1, sr.start_pos.col.0,
+		sr.end_pos.line-1, sr.end_pos.col.0,
 	)));
 	
 	Ok(())
