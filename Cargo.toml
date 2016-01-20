@@ -6,7 +6,7 @@ version = "0.0.1"
 syntex_syntax = "0.26.0"
 
 [[bin]]
-name = "rust_parse_describe_lib"
+name = "parse_describe"
 
 [lib]
 name = "rust_parse_describe"
