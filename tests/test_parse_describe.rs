@@ -12,6 +12,9 @@ fn parse_analysis_tests() {
 	test_parse_analysis("fn foo(\n  blah", r#"
 { ERROR { 1:6 1:6 } "this file contains an un-closed delimiter" }
 { INFO { 0:6 0:7 } "did you mean to close this delimiter?" }"#);
+	
+	/* FIXME: lexer panics*/
+//	test_parse_analysis("const a = '", r#""#);
 }
 
 fn test_parse_analysis(source : &str, expected_msgs : &str) {

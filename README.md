@@ -29,14 +29,14 @@ sample output:
 RUST_PARSE_DESCRIBE 0.1 {
 MESSAGES {
 }
-Use { "std::io" { 0:0 0:12 } }
-Struct { "Foo" { 2:0 5:1 }
-  Var { "blah" { 3:1 3:11 } }
-  Var { "xpto" { 4:1 4:12 } }
+Use { "std::io" { 0:0 0:12 } {} {} {} }
+Struct { "Foo" { 2:0 5:1 } {} {} {}
+  Var { "blah" { 3:1 3:11 } {} {} {} }
+  Var { "xpto" { 4:1 4:12 } {} {} {} }
 }
-Function { "func" { 6:0 6:13 } }
-Trait { "Trait" { 7:0 9:1 }
-  Function { "func" { 8:1 8:23 } }
+Function { "func" { 6:0 6:13 } {} {} {} }
+Trait { "Trait" { 7:0 9:1 } {} {} {}
+  Function { "func" { 8:1 8:23 } {} {} {} }
 }
 }
 ```

@@ -107,7 +107,7 @@ pub fn parse_analysis_contents(source : &str, tokenWriterRc : Rc<RefCell<TokenWr
 	
 	let myEmitter = MessagesHandler::new(codemap.clone());
 	let messages = myEmitter.messages.clone();
-	let handler = Handler::with_emitter(true, true , Box::new(myEmitter));
+	let handler = Handler::with_emitter(true, false, Box::new(myEmitter));
 	let sess = ParseSess::with_span_handler(handler, codemap.clone());
 	
 	let mut krate_result = parse_crate(source, &sess);
