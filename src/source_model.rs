@@ -59,21 +59,21 @@ pub fn sourceRange(start_line : usize, start_col : usize, end_line : usize, end_
 
 use ::util::core::*;
 
-pub enum StatusLevel {
-	OK,
+pub enum Severity {
+	INFO,
 	WARNING,
 	ERROR,
 }
 
 use std::fmt;
 
-impl StatusLevel {
+impl Severity {
 	
 	pub fn output_string(&self, writer : &mut fmt::Write) -> Void {
 		let str = match *self {
-			StatusLevel::ERROR => "ERROR",
-			StatusLevel::WARNING => "WARNING",
-			StatusLevel::OK => "INFO",
+			Severity::ERROR => "ERROR",
+			Severity::WARNING => "WARNING",
+			Severity::INFO => "INFO",
 		};
 		
 		try!(writer.write_str(str)); 
@@ -85,7 +85,7 @@ impl StatusLevel {
 
 pub struct SourceMessage {
 	
-	pub status_level : StatusLevel,
+	pub severity : Severity,
 	pub sourcerange : Option<SourceRange>,
 	pub message : String,
     

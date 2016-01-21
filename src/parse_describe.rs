@@ -120,7 +120,7 @@ pub fn parse_analysis_contents(source : &str, tokenWriterRc : Rc<RefCell<TokenWr
 	
 	try!(tokenWriter.writeRaw("MESSAGES {\n"));
 	for msg in &messages.lock().unwrap() as &Vec<SourceMessage> {
-		try!(output_message(&mut tokenWriter, msg.sourcerange, &msg.message, &msg.status_level));
+		try!(output_message(&mut tokenWriter, msg.sourcerange, &msg.message, &msg.severity));
 	}
 	try!(tokenWriter.writeRaw("}"));
 	
@@ -203,9 +203,9 @@ impl MessagesHandler {
 		MessagesHandler { codemap : codemap, messages : Arc::new(Mutex::new(vec![])) }
 	}
 	
-	fn writeMessage_handled(&mut self, sourcerange : Option<SourceRange>, msg: &str, lvl: StatusLevel) {
+	fn writeMessage_handled(&mut self, sourcerange : Option<SourceRange>, msg: &str, severity: Severity) {
 		
-		let msg = SourceMessage{ status_level : lvl , sourcerange : sourcerange,  message : String::from(msg) };
+		let msg = SourceMessage{ severity : severity , sourcerange : sourcerange,  message : String::from(msg) };
 		
 		let mut messages = self.messages.lock().unwrap();
 		
@@ -240,13 +240,13 @@ impl emitter::Emitter for MessagesHandler {
 	
 }
 
-fn level_to_status_level(lvl: Level) -> StatusLevel {
+fn level_to_status_level(lvl: Level) -> Severity {
 	match lvl { 
-		Level::Bug => panic!("StatusLevel : BUG"), 
-		Level::Cancelled => panic!("StatusLevel : CANCELLED"),
-		Level::Help | Level::Note => StatusLevel::OK, 
-		Level::Warning => StatusLevel::WARNING,
-		Level::Error | Level::Fatal => StatusLevel::ERROR,
+		Level::Bug => panic!("Level::BUG"), 
+		Level::Cancelled => panic!("Level::CANCELLED"),
+		Level::Help | Level::Note => Severity::INFO, 
+		Level::Warning => Severity::WARNING,
+		Level::Error | Level::Fatal => Severity::ERROR,
 	}
 }
 
@@ -256,7 +256,7 @@ impl MessagesHandler {
 
 /* -----------------  ----------------- */
 
-fn output_message(tokenWriter: &mut TokenWriter, opt_sr : Option<SourceRange>, msg: & str, lvl: &StatusLevel) 
+fn output_message(tokenWriter: &mut TokenWriter, opt_sr : Option<SourceRange>, msg: & str, lvl: &Severity) 
 	-> Void
 {
 	
@@ -274,7 +274,7 @@ fn output_message(tokenWriter: &mut TokenWriter, opt_sr : Option<SourceRange>, m
 }
 
 
-pub fn outputString_Level(lvl : &StatusLevel, writer : &mut TokenWriter) -> Void {
+pub fn outputString_Level(lvl : &Severity, writer : &mut TokenWriter) -> Void {
 	
 	try!(lvl.output_string(&mut *writer.out.borrow_mut()));
 	try!(writer.writeRaw(" "));
