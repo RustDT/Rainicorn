@@ -1,6 +1,6 @@
-extern crate rust_parse_describe;
+extern crate rainicorn_lib;
 
-use rust_parse_describe::*;
+use rainicorn_lib::*;
 
 use std::io::{self, Read};
 

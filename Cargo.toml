@@ -6,8 +6,8 @@ version = "0.0.1"
 syntex_syntax = "0.26.0"
 
 [[bin]]
-name = "parse_describe"
+name = "rainicorn"
 
 [lib]
-name = "rust_parse_describe"
+name = "rainicorn_lib"
 path = "src/lib.rs"
