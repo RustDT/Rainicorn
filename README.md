@@ -1,17 +1,33 @@
-# rust_parse_describe
-rust_parse_describe is a tool intended for use by Rust IDEs/editors. 
+# Rainicorn
+Rainicorn is a tool intended for use by Rust IDEs. 
 
-It performs a single operation, a "parse-analysis" of a Rust source file (using lib_syntax, the rustc parser), and returns useful information such as:
+It currenly performs a single operation, a "parse-analysis" of a Rust source file (using lib_syntax, the rustc parser), and returns useful information such as:
  * Parse errors (if any). This can be used to provide on-the-fly parse errors reporting in the editor.
  * The structural elements of the source file (that is, the top-level definitions). This can be used to provide an editor outline, or provider the block source ranges for editor block folding.
 
-The rust_parse_describe tool is a work-in-progress.
+#### TODO:
+An operation that helps IDEs perform "Locate Symbol", ie, find symbol/definition location using a name pattern. **Note**, this is not the same as "Open Definition" - (ie, find a symbol/definition location by means of resolving a reference).
 
-### API
+### parse_describe API (0.1 *THIS IS PROVISIONAL UNTIL FIRST RELEASE*)
 
-*THIS IS PROVISIONAL UNTIL FIRST RELEASE*
+Run the parse_describe tool, provide the Rust source code into stdin.
 
-Sample input:
+Example input (Rust source code):
+```
+fn foo(
+  blah
+```
+Example output:
+```
+RUST_PARSE_DESCRIBE 0.1 {
+MESSAGES { 
+  { ERROR { 1:6 1:6 } "this file contains an un-closed delimiter" }
+  { INFO { 0:6 0:7 } "did you mean to close this delimiter?" }
+}
+}
+```
+--
+Example input:
 ```
 use std::io; 
 
@@ -24,7 +40,7 @@ trait Trait {
 	fn func(param : Type);
 }
 ```
-sample output:
+Example output:
 ```
 RUST_PARSE_DESCRIBE 0.1 {
 MESSAGES {
@@ -41,19 +57,4 @@ Trait { "Trait" { 7:0 9:1 } {} {} {}
 }
 ```
 --
-
-Sample input:
-```
-fn foo(
-  blah
-```
-sample output:
-```
-RUST_PARSE_DESCRIBE 0.1 {
-MESSAGES { 
-  { ERROR { 1:6 1:6 } "this file contains an un-closed delimiter" }
-  { INFO { 0:6 0:7 } "did you mean to close this delimiter?" }
-}
-}
-```
 
