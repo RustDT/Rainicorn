@@ -1,6 +1,6 @@
-extern crate rainicorn_lib;
+extern crate rainicorn;
 
-use rainicorn_lib::*;
+use rainicorn::*;
 
 use std::io::{self, Read};
 

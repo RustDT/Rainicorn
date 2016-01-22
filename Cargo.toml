@@ -1,13 +1,13 @@
 [package]
-name = "rust_parse_describe"
+name = "rainicorn"
 version = "0.0.1"
 
 [dependencies]
 syntex_syntax = "0.26.0"
 
 [[bin]]
-name = "rainicorn"
+name = "parse_describe"
 
 [lib]
-name = "rainicorn_lib"
+name = "rainicorn"
 path = "src/lib.rs"

@@ -1,6 +1,6 @@
-extern crate rainicorn_lib; 
+extern crate rainicorn; 
 
-use rainicorn_lib::parse_describe::*;
+use rainicorn::parse_describe::*;
 
 
 #[test]
@@ -48,4 +48,3 @@ fn assert_ends_with<'a> (string : &'a str, end : &str) -> &'a str {
 	assert!(string.ends_with(end), "`{}` does not end with `{}`", string, end);
 	return &string[0 .. string.len() - end.len()];
 }
-
