@@ -18,79 +18,48 @@
 //! 
 
 use ::util::core::*;
-use ::util::string::*;
 use ::source_model::*;
 
 use ::syntex_syntax::visit::*;
 use ::syntex_syntax::ast::*;
 use ::syntex_syntax::codemap:: { Span, CodeMap };
 
-use ::token_writer::TokenWriter;
-use ::parse_describe::*;
-
-
 pub struct StructureVisitor<'ps> {
 	pub codemap : & 'ps CodeMap,
-	pub tokenWriter : &'ps mut TokenWriter,
-	pub level : u32,
-	pub isFirstChild : bool,
 	pub parentIsStruct : bool,
+	
+	pub elements : Vec<StructureElement>,
 }
 
 impl<'ps> StructureVisitor<'ps> {
 	
-	pub fn new(codemap : &'ps CodeMap, tokenWriter : &'ps mut TokenWriter) -> StructureVisitor<'ps> {
+	pub fn new(codemap : &'ps CodeMap) -> StructureVisitor<'ps> {
 		StructureVisitor { 
-			codemap : codemap, tokenWriter : tokenWriter, 
-			level : 0, isFirstChild : true, parentIsStruct : false 
+			codemap : codemap, parentIsStruct : false, elements : vec![]
 		}
 	}
 	
-	pub fn writeIndent(&mut self) -> Void {
-		try!(writeNTimes(&mut *self.tokenWriter.getCharOut(), ' ', self.level * 2));
-		Ok(())
-	}
-	
-	pub fn writeElement_do<FN>(&mut self, ident: &str, kind : StructureElementKind, sourceRange: &SourceRange, 
-		walkFn : FN) 
+	pub fn writeElement_do<FN>(&mut self, ident: &str, kind: StructureElementKind, sourcerange: SourceRange, 
+		walkFn: FN) 
 		-> Void
 		where FN : Fn(&mut Self) 
 	{
-		try!(self.tokenWriter.getCharOut().write_str("\n"));
-		try!(self.writeIndent());
+
+		let mut siblings = vec![];
+		::std::mem::swap(&mut self.elements, &mut siblings);
 		
-		try!(kind.writeString(&mut *self.tokenWriter.out.borrow_mut()));
+		walkFn(self); // self.elements now has children
 		
-		try!(self.tokenWriter.writeRaw(" { "));
+		::std::mem::swap(&mut self.elements, &mut siblings);
+		let children = siblings;
+		let element = StructureElement{ name: String::from(ident), kind: kind, sourcerange: sourcerange ,
+			children : children };
 		
-		try!(self.tokenWriter.writeStringToken(ident));
-		
-		try!(outputString_SourceRange(sourceRange, &mut self.tokenWriter));
-		
-		try!(self.tokenWriter.getCharOut().write_str(" {}")); // name source range
-		
-		try!(self.tokenWriter.getCharOut().write_str(" {}")); // protection
-		try!(self.tokenWriter.getCharOut().write_str(" {}")); // attribs
-		
-		self.level += 1;
-		self.isFirstChild = true;
-		walkFn(self);
-		self.level -= 1;
-		
-		if self.isFirstChild {
-			try!(self.tokenWriter.getCharOut().write_str(" "));
-		} else {
-			try!(self.tokenWriter.getCharOut().write_str("\n"));
-			try!(self.writeIndent());
-		}
-		
-		try!(self.tokenWriter.getCharOut().write_str("}"));
-		
-		self.isFirstChild = false;
+		self.elements.push(element);
 		Ok(())
 	}
 	
-	pub fn writeElement_handled<FN>(&mut self, ident: &str, kind : StructureElementKind, sourceRange: &SourceRange, 
+	pub fn writeElement_handled<FN>(&mut self, ident: &str, kind : StructureElementKind, sourceRange: SourceRange, 
 		walkFn : FN)
 		where FN : Fn(&mut Self)
 	{
@@ -109,7 +78,7 @@ impl<'ps> StructureVisitor<'ps> {
 	pub fn writeElement<FN>(&mut self, ident: Ident, kind : StructureElementKind, span: Span, walkFn : FN)
 		where FN : Fn(&mut Self)
 	{
-		self.writeElement_handled(&*ident.name.as_str(), kind, &SourceRange::new(self.codemap, span), walkFn)
+		self.writeElement_handled(&*ident.name.as_str(), kind, SourceRange::new(self.codemap, span), walkFn)
 	}
 	
 	/* -----------------  ----------------- */
@@ -173,7 +142,7 @@ impl<'ps> StructureVisitor<'ps> {
 		    }
 		}
 
-		self.writeElement_handled(&useSpec, kind, &SourceRange::new(self.codemap, span), 
+		self.writeElement_handled(&useSpec, kind, SourceRange::new(self.codemap, span), 
 			&|_ : &mut Self| { })
 	}
 
@@ -464,44 +433,24 @@ impl<'v> Visitor<'v> for StructureVisitor<'v> {
 }
 
 
-#[test]
-fn tests_writeStructureElement() {
-	
-	use ::std::rc::Rc;
-	use ::std::cell::RefCell;
-	
-	fn test_writeStructureElement(elemName : &str, kind : StructureElementKind, sr: &SourceRange, expected : &str) {
-		let stringRc = Rc::new(RefCell::new(String::new()));
-		{
-			let mut tw = TokenWriter { out : stringRc.clone() };
-			
-			let cm = CodeMap::new();
-			let mut sv = StructureVisitor::new(&cm, &mut tw);
-			
-			sv.writeElement_do(elemName, kind, &sr, |_| { } ).ok();
-		}
-		
-		assert_eq!(unwrapRcRefCell(stringRc).trim(), expected);
-	}
-	
-	test_writeStructureElement("blah", StructureElementKind::Var, &sourceRange(1, 0, 2, 5), 
-		r#"Var { "blah" { 0:0 1:5 } {} {} {} }"#);
-}
 
 #[test]
-fn tests_writeStructure() {
+fn tests_describe_structure() {
 	
 	use ::std::rc::Rc;
 	use ::std::cell::RefCell;
 	use parse_describe;
+	use ::token_writer::TokenWriter;
+
 	
-	fn test_writeStructureElement(source : &str, expected : &str) {
+	fn test_describe_structure(source : &str, expected : &str) {
 		let stringRc = Rc::new(RefCell::new(String::new()));
 		
 		{
-			let tokenWriter = TokenWriter { out : stringRc.clone() };
-			let tokenWriterRc : Rc<RefCell<TokenWriter>> = Rc::new(RefCell::new(tokenWriter));
-			parse_describe::parse_analysis_contents(source, tokenWriterRc.clone()).ok().unwrap();
+			let (messages, elements) = parse_describe::parse_crate_with_messages(source);
+			
+			let mut tokenWriter = TokenWriter { out : stringRc.clone() };
+			parse_describe::write_parse_analysis_contents(messages, elements, &mut tokenWriter).ok().unwrap();
 		}
 		
 		let expected : &str = &(String::from("MESSAGES {\n}") + 
@@ -516,57 +465,57 @@ fn tests_writeStructure() {
 		assert_eq!(result, expected);
 	}
 	
-	test_writeStructureElement("extern crate xx;", r#"ExternCrate { "xx" { 0:0 0:16 } {} {} {} }"#);
+	test_describe_structure("extern crate xx;", r#"ExternCrate { "xx" { 0:0 0:16 } {} {} {} }"#);
 	
-	test_writeStructureElement("const xx : u32 = 1;", r#"Var { "xx" { 0:0 0:19 } {} {} {} }"#);
+	test_describe_structure("const xx : u32 = 1;", r#"Var { "xx" { 0:0 0:19 } {} {} {} }"#);
 	
 	
-	test_writeStructureElement("mod myMod   ;  ", r#"Mod { "myMod" { 0:0 0:13 } {} {} {} }"#);
-	test_writeStructureElement("mod myMod { }", r#"Mod { "myMod" { 0:0 0:13 } {} {} {} }"#);
-	test_writeStructureElement("mod myMod { static xx : u32 = 2; }", 
+	test_describe_structure("mod myMod   ;  ", r#"Mod { "myMod" { 0:0 0:13 } {} {} {} }"#);
+	test_describe_structure("mod myMod { }", r#"Mod { "myMod" { 0:0 0:13 } {} {} {} }"#);
+	test_describe_structure("mod myMod { static xx : u32 = 2; }", 
 r#"Mod { "myMod" { 0:0 0:34 } {} {} {}
   Var { "xx" { 0:12 0:32 } {} {} {} }
 }"#
 	);
 	
-	test_writeStructureElement("fn xx(a : &str) -> u32 { }", r#"Function { "xx" { 0:0 0:26 } {} {} {} }"#);
+	test_describe_structure("fn xx(a : &str) -> u32 { }", r#"Function { "xx" { 0:0 0:26 } {} {} {} }"#);
 	
-	test_writeStructureElement("type MyType = &u32<asd>;", r#"TypeAlias { "MyType" { 0:0 0:24 } {} {} {} }"#);
+	test_describe_structure("type MyType = &u32<asd>;", r#"TypeAlias { "MyType" { 0:0 0:24 } {} {} {} }"#);
 	
-	test_writeStructureElement("enum MyEnum { Alpha, Beta, } ", 
+	test_describe_structure("enum MyEnum { Alpha, Beta, } ", 
 r#"Enum { "MyEnum" { 0:0 0:28 } {} {} {}
   EnumVariant { "Alpha" { 0:14 0:19 } {} {} {} }
   EnumVariant { "Beta" { 0:21 0:25 } {} {} {} }
 }"#);
-	test_writeStructureElement("enum MyEnum<T, U> { Alpha(T), Beta(U), } ", 
+	test_describe_structure("enum MyEnum<T, U> { Alpha(T), Beta(U), } ", 
 r#"Enum { "MyEnum" { 0:0 0:40 } {} {} {}
   EnumVariant { "Alpha" { 0:20 0:28 } {} {} {} }
   EnumVariant { "Beta" { 0:30 0:37 } {} {} {} }
 }"#);
 	
 	
-	test_writeStructureElement("struct MyStruct ( u32, blah<sdf> ); ", 
+	test_describe_structure("struct MyStruct ( u32, blah<sdf> ); ", 
 r#"Struct { "MyStruct" { 0:0 0:35 } {} {} {} }"#);
-	test_writeStructureElement("struct MyStruct { foo : u32, } ", 
+	test_describe_structure("struct MyStruct { foo : u32, } ", 
 r#"Struct { "MyStruct" { 0:0 0:30 } {} {} {}
   Var { "foo" { 0:18 0:27 } {} {} {} }
 }"#);
 	
-	test_writeStructureElement("trait MyTrait { } ", r#"Trait { "MyTrait" { 0:0 0:17 } {} {} {} }"#);
-	test_writeStructureElement("trait MyTrait : Foo { fn xxx(); } ", 
+	test_describe_structure("trait MyTrait { } ", r#"Trait { "MyTrait" { 0:0 0:17 } {} {} {} }"#);
+	test_describe_structure("trait MyTrait : Foo { fn xxx(); } ", 
 r#"Trait { "MyTrait" { 0:0 0:33 } {} {} {}
   Function { "xxx" { 0:22 0:31 } {} {} {} }
 }"#);
-	test_writeStructureElement("trait MyTrait : Foo { type N: fmt::Display; fn xxx(); const foo :u32 = 3; } ", 
+	test_describe_structure("trait MyTrait : Foo { type N: fmt::Display; fn xxx(); const foo :u32 = 3; } ", 
 r#"Trait { "MyTrait" { 0:0 0:75 } {} {} {}
   TypeAlias { "N" { 0:22 0:43 } {} {} {} }
   Function { "xxx" { 0:44 0:53 } {} {} {} }
   Var { "foo" { 0:54 0:73 } {} {} {} }
 }"#);
 	
-	test_writeStructureElement("impl MyType { } ", r#"Impl { "MyType" { 0:0 0:15 } {} {} {} }"#);
-	test_writeStructureElement("impl MyTrait for MyType { } ", r#"Impl { "MyType.MyTrait" { 0:0 0:27 } {} {} {} }"#);
-	test_writeStructureElement("impl  MyTrait       { type N= fmt::Display; fn xx(){} const foo :u32 = 3; } ", 
+	test_describe_structure("impl MyType { } ", r#"Impl { "MyType" { 0:0 0:15 } {} {} {} }"#);
+	test_describe_structure("impl MyTrait for MyType { } ", r#"Impl { "MyType.MyTrait" { 0:0 0:27 } {} {} {} }"#);
+	test_describe_structure("impl  MyTrait       { type N= fmt::Display; fn xx(){} const foo :u32 = 3; } ", 
 r#"Impl { "MyTrait" { 0:0 0:75 } {} {} {}
   TypeAlias { "N" { 0:22 0:43 } {} {} {} }
   Function { "xx" { 0:44 0:53 } {} {} {} }
@@ -574,33 +523,33 @@ r#"Impl { "MyTrait" { 0:0 0:75 } {} {} {}
 }"#);	
 	
 	
-	test_writeStructureElement("use blah;", r#"Use { "blah" { 0:0 0:9 } {} {} {} }"#);
-	test_writeStructureElement("use blah as foo;", r#"Use { "blah as foo" { 0:0 0:16 } {} {} {} }"#);
+	test_describe_structure("use blah;", r#"Use { "blah" { 0:0 0:9 } {} {} {} }"#);
+	test_describe_structure("use blah as foo;", r#"Use { "blah as foo" { 0:0 0:16 } {} {} {} }"#);
 	// TODO: this is not printing the global path prefix, seems to be a limitation from libsyntax?
-	test_writeStructureElement("use ::blah::foo as myfoo;", r#"Use { "blah::foo as myfoo" { 0:0 0:25 } {} {} {} }"#);
-	test_writeStructureElement("use ::blah::foo::*;", r#"Use { "blah::foo::*" { 0:0 0:19 } {} {} {} }"#);
-	test_writeStructureElement("use blah::foo:: { One as OtherOne, self as Two };", 
+	test_describe_structure("use ::blah::foo as myfoo;", r#"Use { "blah::foo as myfoo" { 0:0 0:25 } {} {} {} }"#);
+	test_describe_structure("use ::blah::foo::*;", r#"Use { "blah::foo::*" { 0:0 0:19 } {} {} {} }"#);
+	test_describe_structure("use blah::foo:: { One as OtherOne, self as Two };", 
 		r#"Use { "blah::foo::{ One as OtherOne, self as Two, }" { 0:0 0:49 } {} {} {} }"#);
 	
 	
-	test_writeStructureElement("my_macro!(asf); ", "");
+	test_describe_structure("my_macro!(asf); ", "");
 	
 	// test: visit_mac! visit method 
-	test_writeStructureElement("fn foo() { my_macro!(asf); }", r#"Function { "foo" { 0:0 0:28 } {} {} {} }"#);
+	test_describe_structure("fn foo() { my_macro!(asf); }", r#"Function { "foo" { 0:0 0:28 } {} {} {} }"#);
 	
-	test_writeStructureElement("macro_rules! foo { (x => $e:expr) => (); }", "");
+	test_describe_structure("macro_rules! foo { (x => $e:expr) => (); }", "");
 	
 	
-	test_writeStructureElement("extern { fn ext(p : u32); }", 
+	test_describe_structure("extern { fn ext(p : u32); }", 
 r#"Mod { "" { 0:0 0:27 } {} {} {}
   Function { "ext" { 0:9 0:25 } {} {} {} }
 }"#);
-	test_writeStructureElement("extern { fn ext(p : u32); \n static extVar: u8; }", 
+	test_describe_structure("extern { fn ext(p : u32); \n static extVar: u8; }", 
 r#"Mod { "" { 0:0 1:21 } {} {} {}
   Function { "ext" { 0:9 0:25 } {} {} {} }
   Var { "extVar" { 1:1 1:19 } {} {} {} }
 }"#);
 	
 	// Test with a lexer error, 
-//	test_writeStructureElement("const xx : u32 = '", r#"Var { "xx" { 1 0 1 19 } {} {} {} }"#);	
+//	test_describe_structure("const xx : u32 = '", r#"Var { "xx" { 1 0 1 19 } {} {} {} }"#);	
 }

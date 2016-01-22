@@ -90,3 +90,48 @@ pub struct SourceMessage {
 	pub message : String,
     
 }
+
+/* ----------------- Model ----------------- */
+
+pub enum StructureElementKind {
+	Var,
+	Function,
+	Struct,
+	Impl,
+	Trait,
+	Enum,
+	EnumVariant,
+	ExternCrate,
+	Mod,
+	Use,
+	TypeAlias,
+}
+
+
+impl StructureElementKind {
+	pub fn writeString(&self, out : &mut fmt::Write) -> fmt::Result {
+		match *self {
+			StructureElementKind::Var => out.write_str("Var"),
+			StructureElementKind::Function => out.write_str("Function"),
+			StructureElementKind::Struct => out.write_str("Struct"),
+			StructureElementKind::Impl => out.write_str("Impl"),
+			StructureElementKind::Trait => out.write_str("Trait"),
+			StructureElementKind::Enum => out.write_str("Enum"),
+			StructureElementKind::EnumVariant => out.write_str("EnumVariant"),
+			StructureElementKind::ExternCrate => out.write_str("ExternCrate"),
+			StructureElementKind::Mod => out.write_str("Mod"),
+			StructureElementKind::Use => out.write_str("Use"),
+			StructureElementKind::TypeAlias => out.write_str("TypeAlias"),
+		}
+	}
+}
+
+pub struct StructureElement {
+	
+	pub name: String,
+	pub kind: StructureElementKind,
+	pub sourcerange : SourceRange,
+	
+	pub children : Vec<StructureElement>,
+    
+}

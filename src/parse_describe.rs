@@ -31,44 +31,7 @@ use std::cell::RefCell;
 use std::rc::*;
 use std::io;
 use std::io::Write;
-
-/* ----------------- Model ----------------- */
-
-pub enum StructureElementKind {
-	Var,
-	Function,
-	Struct,
-	Impl,
-	Trait,
-	Enum,
-	EnumVariant,
-	ExternCrate,
-	Mod,
-	Use,
-	TypeAlias,
-}
-
-
 use std::fmt;
-
-impl StructureElementKind {
-	pub fn writeString(&self, out : &mut fmt::Write) -> fmt::Result {
-		match *self {
-			StructureElementKind::Var => out.write_str("Var"),
-			StructureElementKind::Function => out.write_str("Function"),
-			StructureElementKind::Struct => out.write_str("Struct"),
-			StructureElementKind::Impl => out.write_str("Impl"),
-			StructureElementKind::Trait => out.write_str("Trait"),
-			StructureElementKind::Enum => out.write_str("Enum"),
-			StructureElementKind::EnumVariant => out.write_str("EnumVariant"),
-			StructureElementKind::ExternCrate => out.write_str("ExternCrate"),
-			StructureElementKind::Mod => out.write_str("Mod"),
-			StructureElementKind::Use => out.write_str("Use"),
-			StructureElementKind::TypeAlias => out.write_str("TypeAlias"),
-		}
-	}
-}
-
 
 /* -----------------  ----------------- */
 
@@ -78,60 +41,36 @@ pub fn parse_analysis_forStdout(source : &str) {
 	io::stdout().flush().ok();
 }
 
-
-use ::structure_visitor::StructureVisitor;
-
 pub fn parse_analysis<T : fmt::Write + 'static>(source : &str, out : T) -> Result<T> {
+	let (messages, elements) = parse_crate_with_messages(source);
+	 
 	let outRc = Rc::new(RefCell::new(out));
-	try!(parse_analysis_do(source, outRc.clone()));
+	try!(write_parse_analysis_do(messages, elements, outRc.clone()));
 	let res = unwrapRcRefCell(outRc);
 	return Ok(res);
 }
 
-pub fn parse_analysis_do(source : &str, out : Rc<RefCell<fmt::Write>>) -> Void {
-	
-	let tokenWriter = TokenWriter { out : out };
-	let tokenWriterRc : Rc<RefCell<TokenWriter>> = Rc::new(RefCell::new(tokenWriter));
-	
-	try!(tokenWriterRc.borrow_mut().writeRaw("RUST_PARSE_DESCRIBE 0.1 {\n"));
-	try!(parse_analysis_contents(source, tokenWriterRc.clone()));
-	try!(tokenWriterRc.borrow_mut().writeRaw("\n}"));
-	
-	Ok(())
-}
 
-pub fn parse_analysis_contents(source : &str, tokenWriterRc : Rc<RefCell<TokenWriter>>) -> Void {
-	
+pub fn parse_crate_with_messages(source: &str) -> (Vec<SourceMessage>, Vec<StructureElement>) {
+	use ::structure_visitor::StructureVisitor;
+
 	let fileLoader = Box::new(DummyFileLoader::new());
 	let codemap = Rc::new(CodeMap::with_file_loader(fileLoader));
 	
-	let myEmitter = MessagesHandler::new(codemap.clone());
-	let messages = myEmitter.messages.clone();
-	let handler = Handler::with_emitter(true, false, Box::new(myEmitter));
-	let sess = ParseSess::with_span_handler(handler, codemap.clone());
-	
-	let mut krate_result = parse_crate(source, &sess);
-	
-	let mut tokenWriter = tokenWriterRc.borrow_mut();
-	
-	if let &mut Err(ref mut db) = &mut krate_result {
-		db.emit();
-	}
-	
-	try!(tokenWriter.writeRaw("MESSAGES {\n"));
-	for msg in &messages.lock().unwrap() as &Vec<SourceMessage> {
-		try!(output_message(&mut tokenWriter, msg.sourcerange, &msg.message, &msg.severity));
-	}
-	try!(tokenWriter.writeRaw("}"));
-	
-	if let Ok(krate) = krate_result {
-		let mut visitor : StructureVisitor = StructureVisitor::new(&codemap, &mut tokenWriter);  
-		visit::walk_crate(&mut visitor, &krate);
-	}
-	
-	Ok(())
-}
+	let messages = Rc::new(RefCell::new(vec![]));
+	let krate = parse_crate(source, codemap.clone(), messages.clone());
 
+	let mut elements = vec![];
+	if let Some(krate) = krate {
+		let mut visitor : StructureVisitor = StructureVisitor::new(&codemap);  
+		visit::walk_crate(&mut visitor, &krate);
+		
+		elements = visitor.elements;
+	}
+	
+	let messages = Rc::try_unwrap(messages).ok().unwrap().into_inner();
+	return (messages, elements);
+}
 
 /* -----------------  ----------------- */
 
@@ -159,7 +98,36 @@ impl codemap::FileLoader for DummyFileLoader {
     }
 }
 
-pub fn parse_crate<'a>(source : &str, sess : &'a ParseSess) -> parse::PResult<'a, ast::Crate> 
+
+struct MessagesHandler {
+	codemap : Rc<CodeMap>,
+	messages : Rc<RefCell<Vec<SourceMessage>>>,
+}
+
+ // FIXME: need to review this
+unsafe impl ::std::marker::Send for MessagesHandler { }
+
+fn parse_crate<'a>(source: &str, codemap: Rc<CodeMap>, messages: Rc<RefCell<Vec<SourceMessage>>>) -> Option<ast::Crate> 
+{
+	let emitter = MessagesHandler::new(codemap.clone(), messages.clone());
+	
+	let handler = Handler::with_emitter(true, false, Box::new(emitter));
+	let sess = ParseSess::with_span_handler(handler, codemap.clone());
+	
+	let krate_result = parse_crate_do(source, &sess);
+	
+	return match krate_result {
+		Ok(_krate) => { 
+			Some(_krate) 
+		}
+		Err(mut db) => { 
+			db.emit();
+			None
+		}
+	}
+}
+
+pub fn parse_crate_do<'a>(source : &str, sess : &'a ParseSess) -> parse::PResult<'a, ast::Crate> 
 {
 	let source = source.to_string();
 	
@@ -187,30 +155,21 @@ pub fn parse_crate<'a>(source : &str, sess : &'a ParseSess) -> parse::PResult<'a
 }
 
 
-struct MessagesHandler {
-	codemap : Rc<CodeMap>,
-	messages : Arc<Mutex<Vec<SourceMessage>>>,
-}
 
-use std::sync::{ Arc, Mutex };
-
-
-unsafe impl ::std::marker::Send for MessagesHandler { } // FIXME: need to review this
 
 impl MessagesHandler {
 	
-	fn new(codemap : Rc<CodeMap>, ) -> MessagesHandler {
-		MessagesHandler { codemap : codemap, messages : Arc::new(Mutex::new(vec![])) }
+	fn new(codemap: Rc<CodeMap>, messages: Rc<RefCell<Vec<SourceMessage>>>) -> MessagesHandler {
+		MessagesHandler { codemap : codemap, messages : messages }
 	}
 	
 	fn writeMessage_handled(&mut self, sourcerange : Option<SourceRange>, msg: &str, severity: Severity) {
 		
 		let msg = SourceMessage{ severity : severity , sourcerange : sourcerange,  message : String::from(msg) };
 		
-		let mut messages = self.messages.lock().unwrap();
-		
-		messages.push(msg);
-		
+//		let mut messages = self.messages.lock().unwrap();
+//		messages.push(msg);
+		self.messages.borrow_mut().push(msg);
 	}
 	
 }
@@ -254,7 +213,36 @@ impl MessagesHandler {
 }
 
 
-/* -----------------  ----------------- */
+/* ----------------- describe writting ----------------- */
+
+pub fn write_parse_analysis_do(messages: Vec<SourceMessage>, elements: Vec<StructureElement>, 
+	out : Rc<RefCell<fmt::Write>>) -> Void {
+	
+	let mut tokenWriter = TokenWriter { out : out };
+	
+	try!(tokenWriter.writeRaw("RUST_PARSE_DESCRIBE 0.1 {\n"));
+	try!(write_parse_analysis_contents(messages, elements, &mut tokenWriter));
+	try!(tokenWriter.writeRaw("\n}"));
+	
+	Ok(())
+}
+
+pub fn write_parse_analysis_contents(messages: Vec<SourceMessage>, elements: Vec<StructureElement>, 
+	tokenWriter : &mut TokenWriter) -> Void {
+	
+	try!(tokenWriter.writeRaw("MESSAGES {\n"));
+	for msg in messages {
+		try!(output_message(tokenWriter, msg.sourcerange, &msg.message, &msg.severity));
+	}
+	try!(tokenWriter.writeRaw("}\n"));
+	
+	
+	for element in elements {
+		try!(write_structure_element(tokenWriter, &element, 0));
+	}
+	
+	Ok(())
+}
 
 fn output_message(tokenWriter: &mut TokenWriter, opt_sr : Option<SourceRange>, msg: & str, lvl: &Severity) 
 	-> Void
@@ -302,4 +290,68 @@ pub fn outputString_optSourceRange(sr : &Option<SourceRange>, writer : &mut Toke
 	try!(writer.out.borrow_mut().write_str(" "));
 	
 	Ok(())
+}
+
+
+pub fn write_indent(tokenWriter : &mut TokenWriter, level : u32) -> Void {
+	try!(writeNTimes(&mut *tokenWriter.getCharOut(), ' ', level * 2));
+	Ok(())
+}
+
+pub fn write_structure_element(tw : &mut TokenWriter, element: &StructureElement, level: u32) -> Void
+{
+	try!(element.kind.writeString(&mut *tw.out.borrow_mut()));
+	
+	try!(tw.writeRaw(" { "));
+	
+	try!(tw.writeStringToken(&element.name));
+	
+	try!(outputString_SourceRange(&element.sourcerange, tw));
+	
+	try!(tw.getCharOut().write_str(" {}")); // name source range
+	
+	try!(tw.getCharOut().write_str(" {}")); // protection
+	try!(tw.getCharOut().write_str(" {}")); // attribs
+	
+	
+	if element.children.is_empty() {
+		try!(tw.getCharOut().write_str(" "));
+	} else {
+		let level = level + 1;
+		
+		for child in &element.children {
+			try!(tw.getCharOut().write_str("\n"));
+			try!(write_indent(tw, level));
+			try!(write_structure_element(tw, child, level));
+		}
+		
+		try!(tw.getCharOut().write_str("\n"));
+		try!(write_indent(tw, level-1));
+	}
+	
+	try!(tw.getCharOut().write_str("}"));
+	
+	Ok(())
+}
+
+#[test]
+fn tests_write_structure_element() {
+	
+	use ::std::rc::Rc;
+	use ::std::cell::RefCell;
+	
+	fn test_writeStructureElement(name : &str, kind : StructureElementKind, sr: SourceRange, expected : &str) {
+		let stringRc = Rc::new(RefCell::new(String::new()));
+		{
+			let element = StructureElement { name: String::from(name), kind: kind, sourcerange: sr, children: vec![]}; 
+			let mut tw = TokenWriter { out : stringRc.clone() };
+			
+			write_structure_element(&mut tw, &element, 0).ok();
+		}
+		
+		assert_eq!(unwrapRcRefCell(stringRc).trim(), expected);
+	}
+	
+	test_writeStructureElement("blah", StructureElementKind::Var, sourceRange(1, 0, 2, 5), 
+		r#"Var { "blah" { 0:0 1:5 } {} {} {} }"#);
 }
