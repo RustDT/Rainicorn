@@ -210,7 +210,6 @@ impl<'v> Visitor<'v> for StructureVisitor<'v> {
 				kind = StructureElementKind::Enum;
 			}
 			ItemDefaultImpl(_, ref _trait_ref) => {
-				// FIXME whats this?
 				kind = StructureElementKind::Impl;
 			}
 			ItemImpl(_, _, ref _type_parameters, ref _opt_trait_reference, ref _typ, ref _impl_items) => {
