@@ -18,6 +18,12 @@ use std::io;
 use std::fmt;
 use std::result;
 
+
+pub type CommonException = Box<CommonExceptionT>;
+pub type Result<T> = result::Result<T, CommonException>;
+pub type Void = Result<()>;
+
+
 pub trait CharOutput<ERR> {
 	
     fn write_str(&mut self, s: &str) -> result::Result<(), ERR>;
@@ -34,6 +40,19 @@ pub trait BasicCharOutput {
     fn put_char(&mut self, c: char) ;
 
 }
+
+//impl fmt::Write for BasicCharOutput {
+//	fn write_str(&mut self, str: &str) -> fmt::Result {
+//    	self.put_str(str);
+//    	Ok(())
+//    }
+//	
+//    fn write_char(&mut self, ch: char) -> fmt::Result {
+//    	self.put_char(ch);
+//    	Ok(())
+//    }
+//}
+
 
 impl<ERR> CharOutput<ERR> for BasicCharOutput {
 	
@@ -75,57 +94,57 @@ impl<ERR> CharOutput<ERR> for String {
     }
 }
 
+/* ----------------- CommonCharOutput ----------------- */
+
+pub type CommonCharOutput = CharOutput<CommonException>;
+
 /* -----------------  ----------------- */
 
-pub trait CommonException {
+pub trait CommonExceptionT {
 	
-	fn writeMessage(&self, writer: &mut BasicCharOutput) ;
+	fn write_message(&self, writer: &mut CommonCharOutput) -> Void;
+	
+	fn write_message_to_string(&self) -> String {
+		let mut str = String::new();
+		self.write_message(&mut str).ok(); // Should not error because it's writting to a string
+		str
+	}
 	
 }
 
-pub type BCommonException = Box<CommonException>;
-pub type Result<T> = result::Result<T, BCommonException>;
-pub type Void = Result<()>;
-
-
-impl fmt::Display for CommonException {
+impl fmt::Display for CommonExceptionT {
 	
 	fn fmt(&self, fmt : &mut fmt::Formatter) -> fmt::Result {
-		
-		// FIXME: optimize this by write directly to fmt through an adapter, dont crate intermediate string
-		
-		let mut str = String::new();
-		self.writeMessage(&mut str);
-		fmt.write_str(&str)
-		
-//		struct _BasicWrite<'a>(&'a mut fmt::Formatter<'a>);
-//		impl<'a> BasicWrite for _BasicWrite<'a> {
-//			fn write_str(&mut self, str: &str) {
-//				self.0.write_str(str);
-//		    }
-//			
-//		    fn write_char(&mut self, ch: char) {
-//		    	self.0.write_char(ch);
-//		    }
-//		}
-//		
-//		Ok(())
+		let to_string = self.write_message_to_string();
+		fmt.write_str(&to_string)
 	}
 	
 }
 
 
+struct StringCommonException(String);
+
+impl CommonExceptionT for StringCommonException {
+	fn write_message(&self, out: &mut CommonCharOutput) -> Void {
+		out.write_str(&self.0)
+	}
+}
 
 struct FmtDisplayCommonException<T : fmt::Display>(T);
 
-impl<T : fmt::Display> CommonException for FmtDisplayCommonException<T> {
-	fn writeMessage(&self, writer: &mut BasicCharOutput) {
-		writeSafeDisplay(&self.0, writer);
+impl<T : fmt::Display> CommonExceptionT for FmtDisplayCommonException<T> {
+	fn write_message(& self, out: &mut CommonCharOutput) -> Void {
+		write_display_to_char_out(& self.0, out)
 	}
 }
 
+fn write_display_to_char_out(display: & fmt::Display, out: &mut CommonCharOutput) -> Void {
+	let string = format!("{}", display);
+	out.write_str(&string)
+}
 
-fn writeSafeDisplay(displayObj : &fmt::Display, out: &mut BasicCharOutput) {
+/*
+fn write_display_to_BasicCharOut(display : &fmt::Display, out: &mut BasicCharOutput) {
 	
 	struct _BasicWrite<'a>(&'a mut BasicCharOutput);
 	
@@ -142,34 +161,45 @@ fn writeSafeDisplay(displayObj : &fmt::Display, out: &mut BasicCharOutput) {
 	    
 	}
 	
-	fmt::write(&mut _BasicWrite(out), format_args!("{}", displayObj))
+	fmt::write(&mut _BasicWrite(out), format_args!("{}", display))
 		.expect("displayObj object should not result an error.");
 	
 }
 
-impl convert::From<io::Error> for BCommonException {
+#[test]
+fn test_write_display_to_BasicCharOut() {
+	
+	struct _Display(());
+	impl fmt::Display for _Display {
+		fn fmt(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+			write!(formatter, "Blah {}", "XXX")
+		}
+	}
+	
+	let mut result = String::new();
+	write_display_to_BasicCharOut(&_Display(()), &mut result);
+	assert_eq!(result, "Blah XXX");
+}
+*/
+
+/* ----------------- convert to CommonException ----------------- */
+
+
+impl convert::From<io::Error> for CommonException {
 	fn from(obj: io::Error) -> Self {
 		Box::new(FmtDisplayCommonException(obj))
 	}
 }
 
-impl convert::From<fmt::Error> for BCommonException {
+impl convert::From<fmt::Error> for CommonException {
 	fn from(obj: fmt::Error) -> Self {
 		Box::new(FmtDisplayCommonException(obj))
 	}
 }
 
-impl convert::From<String> for BCommonException {
+impl convert::From<String> for CommonException {
 	fn from(obj: String) -> Self {
-		
-		struct _CommonException(String);
-		impl CommonException for _CommonException {
-			fn writeMessage(&self, out: &mut BasicCharOutput) {
-				out.put_str(&self.0);
-			}
-		}
-		
-		Box::new(_CommonException(obj))
+		Box::new(StringCommonException(obj))
 	}
 }
 
@@ -185,20 +215,6 @@ fn test_convert() {
 	test().unwrap_err();
 }
 
-#[test]
-fn test_fmt_error() {
-	
-	struct _Display(());
-	impl fmt::Display for _Display {
-		fn fmt(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-			write!(formatter, "Blah {}", "XXX")
-		}
-	}
-	
-	let mut result = String::new();
-	writeSafeDisplay(&_Display(()), &mut result);
-	assert_eq!(result, "Blah XXX");
-}
 
 
 /* -----------------  ----------------- */
