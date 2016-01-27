@@ -455,7 +455,7 @@ fn tests_describe_structure() {
 		let expected : &str = &(String::from("MESSAGES {\n}") + 
 			if expected.is_empty() { "" } else { "\n" } + expected);
 		
-		let result = unwrapRcRefCell(stringRc);
+		let result = unwrap_Rc_RefCell(stringRc);
 		let result = result.trim();
 		if !expected.eq(result) {
 			println!("{}", expected);

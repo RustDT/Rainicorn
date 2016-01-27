@@ -46,7 +46,7 @@ pub fn parse_analysis<T : fmt::Write + 'static>(source : &str, out : T) -> Resul
 	 
 	let outRc = Rc::new(RefCell::new(out));
 	try!(write_parse_analysis_do(messages, elements, outRc.clone()));
-	let res = unwrapRcRefCell(outRc);
+	let res = unwrap_Rc_RefCell(outRc);
 	return Ok(res);
 }
 
@@ -248,7 +248,7 @@ fn output_message(tokenWriter: &mut TokenWriter, opt_sr : Option<SourceRange>, m
 	-> Void
 {
 	
-	try!(tokenWriter.out.borrow_mut().write_str("{ "));
+	try!(tokenWriter.writeRaw("{ "));
 	
 	try!(outputString_Level(&lvl, tokenWriter));
 	
@@ -256,7 +256,7 @@ fn output_message(tokenWriter: &mut TokenWriter, opt_sr : Option<SourceRange>, m
 	
 	try!(tokenWriter.writeStringToken(msg));
 	
-	try!(tokenWriter.out.borrow_mut().write_str("}\n"));
+	try!(tokenWriter.writeRaw("}\n"));
 	
 	Ok(())
 }
@@ -264,18 +264,21 @@ fn output_message(tokenWriter: &mut TokenWriter, opt_sr : Option<SourceRange>, m
 
 pub fn outputString_Level(lvl : &Severity, writer : &mut TokenWriter) -> Void {
 	
-	try!(lvl.output_string(&mut *writer.out.borrow_mut()));
-	try!(writer.writeRaw(" "));
+	try!(writer.writeRawToken(lvl.to_string()));
 	
 	Ok(())
 }
 
-pub fn outputString_SourceRange(sr : &SourceRange, writer : &mut TokenWriter) -> Void {
-	let mut out = writer.out.borrow_mut(); 
-	try!(out.write_fmt(format_args!("{{ {}:{} {}:{} }}", 
-		sr.start_pos.line-1, sr.start_pos.col.0,
-		sr.end_pos.line-1, sr.end_pos.col.0,
-	)));
+pub fn outputString_SourceRange(sr : &SourceRange, tw : &mut TokenWriter) -> Void {
+	try!(tw.writeRaw("{ "));
+	{
+		let mut out = tw.getCharOut(); 
+		try!(out.write_fmt(format_args!("{}:{} {}:{} ", 
+			sr.start_pos.line-1, sr.start_pos.col.0,
+			sr.end_pos.line-1, sr.end_pos.col.0,
+		)));
+	}
+	try!(tw.writeRaw("}"));
 	
 	Ok(())
 }
@@ -283,11 +286,11 @@ pub fn outputString_SourceRange(sr : &SourceRange, writer : &mut TokenWriter) ->
 pub fn outputString_optSourceRange(sr : &Option<SourceRange>, writer : &mut TokenWriter) -> Void {
 	
 	match sr {
-		&None => try!(writer.out.borrow_mut().write_str("{ }")) ,
+		&None => try!(writer.writeRaw("{ }")) ,
 		&Some(ref sr) => try!(outputString_SourceRange(sr, writer)) ,
 	}
 	
-	try!(writer.out.borrow_mut().write_str(" "));
+	try!(writer.writeRaw(" "));
 	
 	Ok(())
 }
@@ -300,9 +303,9 @@ pub fn write_indent(tokenWriter : &mut TokenWriter, level : u32) -> Void {
 
 pub fn write_structure_element(tw : &mut TokenWriter, element: &StructureElement, level: u32) -> Void
 {
-	try!(element.kind.writeString(&mut *tw.out.borrow_mut()));
+	try!(tw.writeRawToken(element.kind.to_String()));
 	
-	try!(tw.writeRaw(" { "));
+	try!(tw.writeRaw("{ "));
 	
 	try!(tw.writeStringToken(&element.name));
 	
@@ -343,13 +346,14 @@ fn tests_write_structure_element() {
 	fn test_writeStructureElement(name : &str, kind : StructureElementKind, sr: SourceRange, expected : &str) {
 		let stringRc = Rc::new(RefCell::new(String::new()));
 		{
-			let element = StructureElement { name: String::from(name), kind: kind, sourcerange: sr, children: vec![]}; 
+			let name = String::from(name);
+			let element = StructureElement { name: name, kind: kind, sourcerange: sr, children: vec![]}; 
 			let mut tw = TokenWriter { out : stringRc.clone() };
 			
 			write_structure_element(&mut tw, &element, 0).ok();
 		}
 		
-		assert_eq!(unwrapRcRefCell(stringRc).trim(), expected);
+		assert_eq!(unwrap_Rc_RefCell(stringRc).trim(), expected);
 	}
 	
 	test_writeStructureElement("blah", StructureElementKind::Var, sourceRange(1, 0, 2, 5), 

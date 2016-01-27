@@ -57,7 +57,7 @@ pub fn sourceRange(start_line : usize, start_col : usize, end_line : usize, end_
 
 /* -----------------  ----------------- */
 
-use ::util::core::*;
+//use ::util::core::*;
 
 pub enum Severity {
 	INFO,
@@ -65,20 +65,13 @@ pub enum Severity {
 	ERROR,
 }
 
-use std::fmt;
-
 impl Severity {
-	
-	pub fn output_string(&self, writer : &mut fmt::Write) -> Void {
-		let str = match *self {
+	pub fn to_string(&self) -> &'static str {
+		match *self {
 			Severity::ERROR => "ERROR",
 			Severity::WARNING => "WARNING",
 			Severity::INFO => "INFO",
-		};
-		
-		try!(writer.write_str(str)); 
-		
-		Ok(())
+		}
 	}
 }
 
@@ -109,19 +102,19 @@ pub enum StructureElementKind {
 
 
 impl StructureElementKind {
-	pub fn writeString(&self, out : &mut fmt::Write) -> fmt::Result {
+	pub fn to_String(&self) -> &'static str {
 		match *self {
-			StructureElementKind::Var => out.write_str("Var"),
-			StructureElementKind::Function => out.write_str("Function"),
-			StructureElementKind::Struct => out.write_str("Struct"),
-			StructureElementKind::Impl => out.write_str("Impl"),
-			StructureElementKind::Trait => out.write_str("Trait"),
-			StructureElementKind::Enum => out.write_str("Enum"),
-			StructureElementKind::EnumVariant => out.write_str("EnumVariant"),
-			StructureElementKind::ExternCrate => out.write_str("ExternCrate"),
-			StructureElementKind::Mod => out.write_str("Mod"),
-			StructureElementKind::Use => out.write_str("Use"),
-			StructureElementKind::TypeAlias => out.write_str("TypeAlias"),
+			StructureElementKind::Var => "Var",
+			StructureElementKind::Function => "Function",
+			StructureElementKind::Struct => "Struct",
+			StructureElementKind::Impl => "Impl",
+			StructureElementKind::Trait => "Trait",
+			StructureElementKind::Enum => "Enum",
+			StructureElementKind::EnumVariant => "EnumVariant",
+			StructureElementKind::ExternCrate => "ExternCrate",
+			StructureElementKind::Mod => "Mod",
+			StructureElementKind::Use => "Use",
+			StructureElementKind::TypeAlias => "TypeAlias",
 		}
 	}
 }

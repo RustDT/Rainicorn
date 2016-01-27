@@ -44,22 +44,52 @@ impl TokenWriter {
 	}
 	
 	pub fn writeStringToken(&mut self, string : &str) -> result::Result<(), fmt::Error> {
-		try!(self::writeStringToken(string, &mut* self.getCharOut()));
+		try!(write_escaped_string(string, &mut* self.getCharOut()));
 		
 		self.getCharOut().write_char(' ')
 	}
 	
-	pub fn writeTextToken(&mut self, string : &str) -> result::Result<(), fmt::Error> {
-		try!(self.getCharOut().write_str(string));
+	pub fn writeRawToken(&mut self, string : &str) -> Void {
 		
-		self.getCharOut().write_char(' ')
-		//FIXME: check escapes
-//		self::writeStringToken(string, &mut* self.out)
+		for ch in string.chars() {
+			if ch.is_whitespace() 
+				|| ch == '{' || ch == '}'  
+				|| ch == '(' || ch == ')'
+				|| ch == '[' || ch == ']'
+			{
+				return Err(StringCommonException::create(String::from("Cannot write raw token")));
+			}
+		}
+		
+		try!(self.getCharOut().write_str(string));
+		try!(self.getCharOut().write_char(' '));
+		
+		Ok(())
 	}
 	
 }
 
-pub fn writeStringToken<OUT : ?Sized + fmt::Write>(string : &str, out : &mut OUT) 
+#[test]
+fn test__writeRawToken() {
+	
+	fn writeRawToken_toString(string : &str) -> result::Result<String, CommonException> {
+		let outRc : Rc<RefCell<String>> = Rc::new(RefCell::new(String::new()));
+		
+		let result = TokenWriter { out: outRc.clone() }.writeRawToken(string);
+		match result {
+			Ok(_) => Ok(unwrap_Rc_RefCell(outRc)),
+			Err(error) => Err(error),
+		}
+	}
+	
+	assert_eq!(writeRawToken_toString("blah").ok().unwrap(), r#"blah "#);
+	writeRawToken_toString("bl ah").unwrap_err();
+	writeRawToken_toString("bl{ah").unwrap_err();
+}
+
+/* ----------------- some parser/serialize utils ----------------- */
+
+pub fn write_escaped_string<OUT : ?Sized + fmt::Write>(string : &str, out : &mut OUT) 
 	-> fmt::Result 
 //pub fn writeStringToken<ERR, OUT : ?Sized + CharOutput<ERR>>(string : &str, out : &mut OUT) 
 //	-> result::Result<(), ERR> 
@@ -83,15 +113,15 @@ pub fn writeStringToken<OUT : ?Sized + fmt::Write>(string : &str, out : &mut OUT
 	Ok(())
 }
 
-pub fn writeStringToken_toString(string : &str) -> String {
-	let mut result = String::new();
-//	writeStringToken(string, &mut result as &mut CharOutput<()>).unwrap();
-	writeStringToken(string, &mut result).unwrap();
-	result
-}
 
 #[test]
-fn test_writeStringToken() {
+fn test__write_escaped_string() {
+	
+	fn writeStringToken_toString(string : &str) -> String {
+		let mut result = String::new();
+		write_escaped_string(string, &mut result).unwrap();
+		result
+	}
 	
 	assert_eq!(writeStringToken_toString(""), r#""""#);
 	assert_eq!(writeStringToken_toString("abc"), r#""abc""#);
@@ -100,5 +130,4 @@ fn test_writeStringToken() {
 	assert_eq!(writeStringToken_toString(r#"\"#), r#""\\""#);
 	assert_eq!(writeStringToken_toString(r#"--\"-"#), r#""--\\\"-""#);
 	assert_eq!(writeStringToken_toString(r#"---\"#), r#""---\\""#);
-	
 }

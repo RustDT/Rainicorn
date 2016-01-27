@@ -122,7 +122,15 @@ impl fmt::Display for CommonExceptionT {
 }
 
 
-struct StringCommonException(String);
+pub struct StringCommonException(String);
+
+impl StringCommonException {
+	
+	pub fn create(string : String) -> Box<StringCommonException> {
+		Box::new(StringCommonException(string))
+	}
+	
+}
 
 impl CommonExceptionT for StringCommonException {
 	fn write_message(&self, out: &mut CommonCharOutput) -> Void {
@@ -222,7 +230,7 @@ fn test_convert() {
 use std::rc::Rc;
 use std::cell::RefCell;
 
-pub fn unwrapRcRefCell<T>(this: Rc<RefCell<T>>) -> T {
+pub fn unwrap_Rc_RefCell<T>(this: Rc<RefCell<T>>) -> T {
 	let ures : result::Result<RefCell<_>, _> = Rc::try_unwrap(this);
 	match ures {
 		Ok(refCell) => return refCell.into_inner(),
