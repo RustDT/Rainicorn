@@ -5,12 +5,12 @@ It currenly performs a single operation, a "parse-analysis" of a Rust source fil
  * Parse errors (if any). This can be used to provide on-the-fly parse errors reporting in the editor.
  * The structural elements of the source file (that is, the top-level definitions). This can be used to provide an editor outline, or provider the block source ranges for editor block folding.
 
-#### TODO:
+##### Future TODO:
 An operation that helps IDEs perform "Locate Symbol", ie, find symbol/definition location using a name pattern. **Note**, this is not the same as "Open Definition" - (ie, find a symbol/definition location by means of resolving a reference).
 
-### parse_describe API (0.1 *THIS IS PROVISIONAL UNTIL FIRST RELEASE*)
+### parse_describe API (0.1)
 
-Run the parse_describe tool, provide the Rust source code into stdin.
+Run the parse_describe tool, provide the Rust source code into stdin. Output supplied to stdout. All operation output is in the fornat of a simple block tokens language (described below). 
 
 Example input (Rust source code):
 ```
@@ -57,4 +57,22 @@ Trait { "Trait" { 7:0 9:1 } {} {} {}
 }
 ```
 --
+#### Spec:
 
+* OUTPUT = `RUST_PARSE_DESCRIBE 0.1 {`  `{` MESSAGE* `}`  SOURCE_ELEMENT* `}`
+* MESSAGE = `{` severity=SEVERITY source_range=SOURCE_RANGE text=QUOTED_STRING `}`
+* SEVERITY = `ERROR` | `WARNING` | `INFO`
+* SOURCE_RANGE = `{` start_pos=POSITION end_pos=POSITION `}`
+* POSITION -> a quoted or raw string in the format `line:column` or `@absolute_offset`. line, column and offset are zero-based indexes. Example `0:2`, `"5:10"` or `@250`.
+* SOURCE_ELEMENT = ELEMENT_KIND `{` name=QUOTED_STRING source_range=SOURCE_RANGE name_source_range=SOURCE_RANGE PROTECTION ATTRIBUTES `}`
+* ELEMENT_KIND ->  one of Var, Function, Struct, Impl, Trait, Enum, EnumVariant, ExternCrate, Mod, Use, TypeAlias;
+* PROTECTION = `{}`  **No info currently supplied, but saved for future usage**
+* ATTRIBUTES = `{}`  **No info currently supplied, but saved for future usage**
+
+#### Block tokens:
+This data language only has 3 types of tokens:
+* *WHITESPACE*: Ignored. There are no comments (yet).
+* *STRING*: Either raw text (ie `Foo` or a quoted string (`"Foo"` or `"blah \" blah "`).
+* *BRACE*: An open or closing brace, either one of: `{`, `}`, `(`, `)`, `[`, `]`.
+
+The only structural requirement of this language is that the braces be correctly balanced.
