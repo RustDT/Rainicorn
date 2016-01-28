@@ -13,8 +13,9 @@ fn parse_analysis_tests() {
 { ERROR { 1:6 1:6 } "this file contains an un-closed delimiter" }
 { INFO { 0:6 0:7 } "did you mean to close this delimiter?" }"#);
 	
-	/* FIXME: lexer panics*/
-//	test_parse_analysis("const a = '", r#""#);
+	// Test a lexer panic
+	test_parse_analysis("const a = '", 
+		r#"{ ERROR { 0:10 0:11 } "character literal may only contain one codepoint: '" }"#);
 }
 
 fn test_parse_analysis(source : &str, expected_msgs : &str) {

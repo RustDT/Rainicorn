@@ -50,26 +50,49 @@ pub fn parse_analysis<T : fmt::Write + 'static>(source : &str, out : T) -> Resul
 	return Ok(res);
 }
 
+use std::thread;
+use std::sync::{Arc, Mutex};
 
 pub fn parse_crate_with_messages(source: &str) -> (Vec<SourceMessage>, Vec<StructureElement>) {
-	use ::structure_visitor::StructureVisitor;
+	
+	let messages = Arc::new(Mutex::new(vec![]));
+	let elements =
+	{
+		let source = String::from(source);
+		let messages = messages.clone();
+		
+		let worker_thread = thread::Builder::new().name("parser_thread".to_string()).spawn(move || {
+			parse_crate_with_messages_do(&source, messages)
+		}).unwrap();
+		
+		worker_thread.join().unwrap_or(vec![])
+	};
+	
+	let messages : Mutex<Vec<SourceMessage>> = Arc::try_unwrap(messages).ok().unwrap(); 
+	let messages : Vec<SourceMessage> = messages.into_inner().unwrap();
+	
+	return (messages, elements);
+}
 
+pub fn parse_crate_with_messages_do(source: &str, messages: Arc<Mutex<Vec<SourceMessage>>>) 
+	-> Vec<StructureElement> 
+{
+	use ::structure_visitor::StructureVisitor;
+	
+	let mut elements = vec![];
+	
 	let fileLoader = Box::new(DummyFileLoader::new());
 	let codemap = Rc::new(CodeMap::with_file_loader(fileLoader));
 	
-	let messages = Rc::new(RefCell::new(vec![]));
 	let krate = parse_crate(source, codemap.clone(), messages.clone());
-
-	let mut elements = vec![];
+	
 	if let Some(krate) = krate {
 		let mut visitor : StructureVisitor = StructureVisitor::new(&codemap);  
 		visit::walk_crate(&mut visitor, &krate);
 		
 		elements = visitor.elements;
 	}
-	
-	let messages = Rc::try_unwrap(messages).ok().unwrap().into_inner();
-	return (messages, elements);
+	return elements;
 }
 
 /* -----------------  ----------------- */
@@ -101,13 +124,11 @@ impl codemap::FileLoader for DummyFileLoader {
 
 struct MessagesHandler {
 	codemap : Rc<CodeMap>,
-	messages : Rc<RefCell<Vec<SourceMessage>>>,
+	messages : Arc<Mutex<Vec<SourceMessage>>>,
 }
 
- // FIXME: need to review this
-unsafe impl ::std::marker::Send for MessagesHandler { }
 
-fn parse_crate<'a>(source: &str, codemap: Rc<CodeMap>, messages: Rc<RefCell<Vec<SourceMessage>>>) -> Option<ast::Crate> 
+fn parse_crate<'a>(source: &str, codemap: Rc<CodeMap>, messages: Arc<Mutex<Vec<SourceMessage>>>) -> Option<ast::Crate> 
 {
 	let emitter = MessagesHandler::new(codemap.clone(), messages.clone());
 	
@@ -159,7 +180,7 @@ pub fn parse_crate_do<'a>(source : &str, sess : &'a ParseSess) -> parse::PResult
 
 impl MessagesHandler {
 	
-	fn new(codemap: Rc<CodeMap>, messages: Rc<RefCell<Vec<SourceMessage>>>) -> MessagesHandler {
+	fn new(codemap: Rc<CodeMap>, messages: Arc<Mutex<Vec<SourceMessage>>>) -> MessagesHandler {
 		MessagesHandler { codemap : codemap, messages : messages }
 	}
 	
@@ -167,9 +188,8 @@ impl MessagesHandler {
 		
 		let msg = SourceMessage{ severity : severity , sourcerange : sourcerange,  message : String::from(msg) };
 		
-//		let mut messages = self.messages.lock().unwrap();
-//		messages.push(msg);
-		self.messages.borrow_mut().push(msg);
+		let mut messages = self.messages.lock().unwrap();
+		messages.push(msg);
 	}
 	
 }
