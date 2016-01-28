@@ -8,7 +8,7 @@ It currenly performs a single operation, a "parse-analysis" of a Rust source fil
 ##### Future TODO:
 An operation that helps IDEs perform "Locate Symbol", ie, find symbol/definition location using a name pattern. **Note**, this is not the same as "Open Definition" - (ie, find a symbol/definition location by means of resolving a reference).
 
-### parse_describe API (0.1)
+### parse_describe API (1.0)
 
 Run the parse_describe tool, provide the Rust source code into stdin. Output supplied to stdout. All operation output is in the fornat of a simple block tokens language (described below). 
 
@@ -19,7 +19,7 @@ fn foo(
 ```
 Example output:
 ```
-RUST_PARSE_DESCRIBE 0.1 {
+RUST_PARSE_DESCRIBE 1.0 {
 MESSAGES { 
   { ERROR { 1:6 1:6 } "this file contains an un-closed delimiter" }
   { INFO { 0:6 0:7 } "did you mean to close this delimiter?" }
@@ -42,7 +42,7 @@ trait Trait {
 ```
 Example output:
 ```
-RUST_PARSE_DESCRIBE 0.1 {
+RUST_PARSE_DESCRIBE 1.0 {
 MESSAGES {
 }
 Use { "std::io" { 0:0 0:12 } {} {} {} }
@@ -59,7 +59,7 @@ Trait { "Trait" { 7:0 9:1 } {} {} {}
 --
 #### Spec:
 
-* OUTPUT = `RUST_PARSE_DESCRIBE 0.1 {`  `{` MESSAGE* `}`  SOURCE_ELEMENT* `}`
+* OUTPUT = `RUST_PARSE_DESCRIBE version=TEXT {`  `{` MESSAGE* `}`  SOURCE_ELEMENT* `}`
 * MESSAGE = `{` severity=SEVERITY source_range=SOURCE_RANGE text=QUOTED_STRING `}`
 * SEVERITY = `ERROR` | `WARNING` | `INFO`
 * SOURCE_RANGE = `{` start_pos=POSITION end_pos=POSITION `}`
@@ -72,7 +72,7 @@ Trait { "Trait" { 7:0 9:1 } {} {} {}
 #### Block tokens:
 This data language only has 3 types of tokens:
 * *WHITESPACE*: Ignored. There are no comments (yet).
-* *STRING*: Either raw text (ie `Foo` or a quoted string (`"Foo"` or `"blah \" blah "`).
+* *TEXT*: Either raw text (ie `Foo` or a quoted string (`"Foo"` or `"blah \" blah "`). #TODO spec
 * *BRACE*: An open or closing brace, either one of: `{`, `}`, `(`, `)`, `[`, `]`.
 
 The only structural requirement of this language is that the braces be correctly balanced.

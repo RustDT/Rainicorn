@@ -22,7 +22,7 @@ fn test_parse_analysis(source : &str, expected_msgs : &str) {
 	let result = parse_analysis(source, String::new()).ok().unwrap();
 	let mut result : &str = &result;
 	
-	result = assert_surrounding_string("RUST_PARSE_DESCRIBE 0.1 {", result, "}");
+	result = assert_surrounding_string("RUST_PARSE_DESCRIBE 1.0 {", result, "}");
 	
 	result = assert_starts_with("MESSAGES {", result.trim());
 	result = assert_starts_with(expected_msgs.trim(), result.trim());

@@ -240,7 +240,7 @@ pub fn write_parse_analysis_do(messages: Vec<SourceMessage>, elements: Vec<Struc
 	
 	let mut tokenWriter = TokenWriter { out : out };
 	
-	try!(tokenWriter.writeRaw("RUST_PARSE_DESCRIBE 0.1 {\n"));
+	try!(tokenWriter.writeRaw("RUST_PARSE_DESCRIBE 1.0 {\n"));
 	try!(write_parse_analysis_contents(messages, elements, &mut tokenWriter));
 	try!(tokenWriter.writeRaw("\n}"));
 	

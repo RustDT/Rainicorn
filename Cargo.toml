@@ -1,6 +1,6 @@
 [package]
 name = "rainicorn"
-version = "0.0.1"
+version = "1.0.0"
 
 [dependencies]
 syntex_syntax = "0.26.0"
