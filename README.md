@@ -63,10 +63,12 @@ Trait { "Trait" { 7:0 9:1 } {} {} {}
 * MESSAGE = `{` severity=SEVERITY source_range=SOURCE_RANGE text=QUOTED_STRING `}`
 * SEVERITY = `ERROR` | `WARNING` | `INFO`
 * SOURCE_RANGE = `{` start_pos=POSITION end_pos=POSITION `}`
-* POSITION -> a quoted or raw string in the format `line:column` or `@absolute_offset`. line, column and offset are zero-based indexes. Example `0:2`, `"5:10"` or `@250`.
-* SOURCE_ELEMENT = ELEMENT_KIND `{` name=QUOTED_STRING source_range=SOURCE_RANGE name_source_range=SOURCE_RANGE PROTECTION ATTRIBUTES `}`
+* POSITION = QUOTED_STRING 
+  * A string value in the format `line:column` or `@absolute_offset`. line, column and offset are zero-based indexes. Example `0:2`, `"5:10"` or `@250`.
+* SOURCE_ELEMENT = ELEMENT_KIND `{` name=QUOTED_STRING source_range=SOURCE_RANGE name_source_range=SOURCE_RANGE TYPE_DESC ATTRIBUTES `}`
 * ELEMENT_KIND ->  one of Var, Function, Struct, Impl, Trait, Enum, EnumVariant, ExternCrate, Mod, Use, TypeAlias;
-* PROTECTION = `{}`  **No info currently supplied, but saved for future usage**
+* TYPE_DESC = QUOTED_STRING 
+  * A string value with a description of the "type" of the given element. Currently this will contain the signature of functions, or the type of Const/Static elements.
 * ATTRIBUTES = `{}`  **No info currently supplied, but saved for future usage**
 
 #### Block tokens:

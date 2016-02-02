@@ -331,11 +331,12 @@ pub fn write_structure_element(tw : &mut TokenWriter, element: &StructureElement
 	
 	try!(outputString_SourceRange(&element.sourcerange, tw));
 	
-	try!(tw.getCharOut().write_str(" {}")); // name source range
+	try!(tw.getCharOut().write_str(" {}")); // name source range, Not Supported
 	
-	try!(tw.getCharOut().write_str(" {}")); // protection
-	try!(tw.getCharOut().write_str(" {}")); // attribs
+	try!(tw.getCharOut().write_str(" "));
+	try!(tw.writeStringToken(&element.type_desc)); 
 	
+	try!(tw.getCharOut().write_str("{}")); // attribs, Not Supported
 	
 	if element.children.is_empty() {
 		try!(tw.getCharOut().write_str(" "));
@@ -363,11 +364,14 @@ fn tests_write_structure_element() {
 	use ::std::rc::Rc;
 	use ::std::cell::RefCell;
 	
-	fn test_writeStructureElement(name : &str, kind : StructureElementKind, sr: SourceRange, expected : &str) {
+	fn test_writeStructureElement(name : &str, kind : StructureElementKind, sr: SourceRange, type_desc : String,
+		expected : &str,
+	) {
 		let stringRc = Rc::new(RefCell::new(String::new()));
 		{
 			let name = String::from(name);
-			let element = StructureElement { name: name, kind: kind, sourcerange: sr, children: vec![]}; 
+			let element = StructureElement { name: name, kind: kind, sourcerange: sr, type_desc: type_desc,
+				 children: vec![]}; 
 			let mut tw = TokenWriter { out : stringRc.clone() };
 			
 			write_structure_element(&mut tw, &element, 0).ok();
@@ -376,6 +380,6 @@ fn tests_write_structure_element() {
 		assert_eq!(unwrap_Rc_RefCell(stringRc).trim(), expected);
 	}
 	
-	test_writeStructureElement("blah", StructureElementKind::Var, sourceRange(1, 0, 2, 5), 
-		r#"Var { "blah" { 0:0 1:5 } {} {} {} }"#);
+	test_writeStructureElement("blah", StructureElementKind::Var, sourceRange(1, 0, 2, 5), "blah".to_string(),
+		r#"Var { "blah" { 0:0 1:5 } {} "" {} }"#);
 }

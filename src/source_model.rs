@@ -123,8 +123,9 @@ pub struct StructureElement {
 	
 	pub name: String,
 	pub kind: StructureElementKind,
-	pub sourcerange : SourceRange,
+	pub sourcerange: SourceRange,
 	
-	pub children : Vec<StructureElement>,
+	pub type_desc: String,
+	pub children: Vec<StructureElement>,
     
 }
