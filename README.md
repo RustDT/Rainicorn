@@ -5,6 +5,9 @@ It currenly performs a single operation, a "parse-analysis" of a Rust source fil
  * Parse errors (if any). This can be used to provide on-the-fly parse errors reporting in the editor.
  * The structural elements of the source file (that is, the top-level definitions). This can be used to provide an editor outline, or provider the block source ranges for editor block folding.
 
+##### Installation
+Run `cargo install --git https://github.com/RustDT/Rainicorn --tag version_1.x`
+
 ##### Future TODO:
 An operation that helps IDEs perform "Locate Symbol", ie, find symbol/definition location using a name pattern. **Note**, this is not the same as "Open Definition" - (ie, find a symbol/definition location by means of resolving a reference).
 
