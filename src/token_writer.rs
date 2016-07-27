@@ -95,8 +95,6 @@ pub fn write_escaped_string<OUT : ?Sized + fmt::Write>(string : &str, out : &mut
 //	-> result::Result<(), ERR> 
 {
 	
-	use std::fmt::Write;
-	
 	try!(out.write_char('"'));
 	
 	for ch in string.chars() {
