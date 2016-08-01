@@ -7,6 +7,7 @@ syntex_syntax = "0.26.0"
 
 [[bin]]
 name = "parse_describe"
+test = false
 
 [lib]
 name = "rainicorn"

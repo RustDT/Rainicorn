@@ -121,6 +121,14 @@ impl fmt::Display for CommonExceptionT {
 	
 }
 
+impl fmt::Debug for CommonExceptionT {
+	
+	fn fmt(&self, fmt : &mut fmt::Formatter) -> fmt::Result {
+		<Self as fmt::Display>::fmt(self, fmt)
+	}
+	
+}
+
 
 pub struct StringCommonException(String);
 
@@ -208,6 +216,14 @@ impl convert::From<fmt::Error> for CommonException {
 impl convert::From<String> for CommonException {
 	fn from(obj: String) -> Self {
 		Box::new(StringCommonException(obj))
+	}
+}
+
+use std::num;
+
+impl convert::From<num::ParseIntError> for CommonException {
+	fn from(obj: num::ParseIntError) -> Self {
+		Box::new(FmtDisplayCommonException(obj))
 	}
 }
 

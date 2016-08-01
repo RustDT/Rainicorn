@@ -380,6 +380,6 @@ fn tests_write_structure_element() {
 		assert_eq!(unwrap_Rc_RefCell(stringRc).trim(), expected);
 	}
 	
-	test_writeStructureElement("blah", StructureElementKind::Var, sourceRange(1, 0, 2, 5), "blah".to_string(),
-		r#"Var { "blah" { 0:0 1:5 } {} "" {} }"#);
+	test_writeStructureElement("blah", StructureElementKind::Var, sourceRange(1, 0, 2, 5), "desc".to_string(),
+		r#"Var { "blah" { 0:0 1:5 } {} "desc" {} }"#);
 }
