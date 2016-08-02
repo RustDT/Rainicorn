@@ -4,6 +4,7 @@ version = "1.0.0"
 
 [dependencies]
 syntex_syntax = "0.26.0"
+RustLSP = { git = "https://github.com/RustDT/RustLSP" , version = "0.1.0" } 
 
 [[bin]]
 name = "parse_describe"
