@@ -1,9 +1,7 @@
 #![allow(non_snake_case)]
 
 extern crate syntex_syntax;
-extern crate rust_lsp;
-
-pub use rust_lsp::util;
+extern crate rustdt_util as util;
 
 pub mod token_writer;
 pub mod source_model;

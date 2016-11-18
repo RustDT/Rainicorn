@@ -41,7 +41,7 @@ pub fn parse_analysis_forStdout(source : &str) {
 	io::stdout().flush().ok();
 }
 
-pub fn parse_analysis<T : fmt::Write + 'static>(source : &str, out : T) -> Result<T> {
+pub fn parse_analysis<T : fmt::Write + 'static>(source : &str, out : T) -> GResult<T> {
 	let (messages, elements) = parse_crate_with_messages(source);
 	 
 	let outRc = Rc::new(RefCell::new(out));

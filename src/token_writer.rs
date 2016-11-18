@@ -57,7 +57,7 @@ impl TokenWriter {
 				|| ch == '(' || ch == ')'
 				|| ch == '[' || ch == ']'
 			{
-				return Err(StringCommonException::create(String::from("Cannot write raw token")));
+				return Err("Cannot write raw token".into());
 			}
 		}
 		
@@ -72,7 +72,7 @@ impl TokenWriter {
 #[test]
 fn test__writeRawToken() {
 	
-	fn writeRawToken_toString(string : &str) -> result::Result<String, CommonException> {
+	fn writeRawToken_toString(string : &str) -> GResult<String> {
 		let outRc : Rc<RefCell<String>> = Rc::new(RefCell::new(String::new()));
 		
 		let result = TokenWriter { out: outRc.clone() }.writeRawToken(string);

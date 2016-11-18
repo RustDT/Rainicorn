@@ -1,10 +1,10 @@
 [package]
 name = "rainicorn"
-version = "1.0.0"
+version = "1.2.0"
 
 [dependencies]
 syntex_syntax = "0.26.0"
-RustLSP = { git = "https://github.com/RustDT/RustLSP" , version = "0.1.0" } 
+rustdt_util ="0.2.3"
 
 [[bin]]
 name = "parse_describe"
