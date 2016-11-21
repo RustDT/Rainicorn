@@ -19,8 +19,10 @@ use source_model::*;
 use syntex_syntax::syntax::ast;
 use syntex_syntax::parse::{ self, ParseSess };
 use syntex_syntax::visit;
-use syntex_syntax::codemap:: { self, MultiSpan, CodeMap};
-use syntex_errors::{ Handler, RenderSpan, Level, emitter };
+use syntex_syntax::codemap::{ self, MultiSpan, CodeMap};
+use syntex_errors::{ Handler, RenderSpan, Level, DiagnosticBuilder };
+use syntex_errors::emitter::{ self };
+
 
 use std::boxed::Box;
 use std::path::Path;
@@ -205,21 +207,14 @@ impl MessagesHandler {
     
 }
 
-impl emitter::CoreEmitter for MessagesHandler {
+impl emitter::Emitter for MessagesHandler {
     
-    fn emit_message(
-        &mut self,
-        rsp: &RenderSpan,
-        msg: &str,
-        code: Option<&str>,
-        lvl: Level,
-        _is_header: bool,
-        _show_snippet: bool
-    ) { 
-        let multispan : &MultiSpan = match *rsp {
-            RenderSpan::FullSpan(ref multispan) => multispan,
-            _ => return
-        };
+    fn emit(&mut self, db: &DiagnosticBuilder) {
+        let msg: &str = &db.message;
+        let code: Option<&String> = db.code.as_ref();
+        let lvl: Level = db.level;
+        
+        let multispan : &MultiSpan = &db.span;
         
         if let Some(code) = code {
             io::stderr().write_fmt(format_args!("Code: {}\n", code)).unwrap();
