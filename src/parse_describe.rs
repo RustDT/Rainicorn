@@ -19,7 +19,7 @@ use ::source_model::*;
 use ::syntex_syntax::syntax::ast;
 use ::syntex_syntax::parse::{ self, ParseSess };
 use ::syntex_syntax::visit;
-use ::syntex_syntax::codemap:: { self, Span, MultiSpan, CodeMap};
+use ::syntex_syntax::codemap:: { self, MultiSpan, CodeMap};
 use ::syntex_syntax::errors:: { Handler, RenderSpan, Level, emitter };
 
 use std::boxed::Box;
@@ -371,7 +371,7 @@ mod parse_describe_tests {
     use source_model::*;
     use token_writer::TokenWriter;
     use util::core::*;
-    
+    use util::tests::check_equal;
     use std::rc::Rc;
     use std::cell::RefCell;
     
@@ -407,7 +407,10 @@ mod parse_describe_tests {
         
         test_parse_analysis("fn foo(\n  blah", r#"
 { ERROR { 1:6 1:6 } "this file contains an un-closed delimiter" }
-{ INFO { 0:6 0:7 } "did you mean to close this delimiter?" }"#
+{ INFO { 0:6 0:7 } "did you mean to close this delimiter?" }
+{ ERROR { 1:6 1:6 } "expected one of `:` or `@`, found `)`" }
+{ ERROR { 1:6 1:6 } "expected one of `->`, `where`, or `{`, found `<eof>`" }
+"#
         );
         
         // Test a lexer panic
@@ -416,9 +419,7 @@ mod parse_describe_tests {
         );
         
         if true { return }; // TODO
-        test_parse_analysis("pub extern crate my_crate;", 
-            r#""#
-        );
+
         // test `?` syntax shorthand for try:
         test_parse_analysis("fn foo() { 123? }", 
             r#""#
@@ -434,9 +435,7 @@ mod parse_describe_tests {
         result = assert_starts_with("MESSAGES {", result.trim());
         expected_msgs.replace("\r\n", "\n");
         result = assert_starts_with(expected_msgs.trim(), result.trim());
-        result = assert_starts_with("}", result.trim());
-        
-        assert_eq!(result, "");
+        check_equal(result.trim(), "}");
     }
     
     fn assert_surrounding_string<'a> (start : &str, string : &'a str, end : &str) -> &'a str {
