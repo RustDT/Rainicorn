@@ -20,7 +20,7 @@ use syntex_syntax::syntax::ast;
 use syntex_syntax::parse::{ self, ParseSess };
 use syntex_syntax::visit;
 use syntex_syntax::codemap::{ self, MultiSpan, CodeMap};
-use syntex_errors::{ Handler, RenderSpan, Level, DiagnosticBuilder };
+use syntex_errors::{ Handler, Level, DiagnosticBuilder };
 use syntex_errors::emitter::{ self };
 
 
@@ -182,7 +182,7 @@ pub fn parse_crate_do<'a>(source : &str, sess : &'a ParseSess) -> parse::PResult
         try!(p1.parse_all_token_trees())
     };
     
-    let trdr = parse::lexer::new_tt_reader(&sess.span_diagnostic, None, None, tts);
+    let trdr = parse::lexer::new_tt_reader(&sess.span_diagnostic, None, tts);
     let mut parser = parse::parser::Parser::new(sess, cfg, Box::new(trdr));
     
     return parser.parse_crate_mod();
@@ -380,6 +380,7 @@ mod parse_describe_tests {
     use token_writer::TokenWriter;
     use util::core::*;
     use util::tests::check_equal;
+    use util;
     use std::rc::Rc;
     use std::cell::RefCell;
     
@@ -415,7 +416,6 @@ mod parse_describe_tests {
         
         test_parse_analysis("fn foo(\n  blah", r#"
 { ERROR { 1:6 1:6 } "this file contains an un-closed delimiter" }
-{ INFO { 0:6 0:7 } "did you mean to close this delimiter?" }
 { ERROR { 1:6 1:6 } "expected one of `:` or `@`, found `)`" }
 { ERROR { 1:6 1:6 } "expected one of `->`, `where`, or `{`, found `<eof>`" }
 "#
@@ -426,11 +426,9 @@ mod parse_describe_tests {
             r#"{ ERROR { 0:10 0:11 } "character literal may only contain one codepoint: '" }"#
         );
         
-        if true { return }; // TODO
-
         // test `?` syntax shorthand for try:
         test_parse_analysis("fn foo() { 123? }", 
-            r#""#
+            &("}\n".to_string() + r#"Function { "foo" { 0:0 0:17 } {} "()" {}"#)
         );
     }
     
@@ -455,11 +453,8 @@ mod parse_describe_tests {
         return string;
     }
     
-    fn assert_starts_with<'a> (start : &str, string : &'a str) -> &'a str {
-        if !string.starts_with(start) {
-            println!("\nThe string:\n{}\n does not start with:\n`{}`", string, start);
-            assert!(false);
-        }
+    fn assert_starts_with<'a>(start : &str, string : &'a str) -> &'a str {
+        util::tests::assert_starts_with(string, start);
         return &string[start.len() .. ];
     }
     

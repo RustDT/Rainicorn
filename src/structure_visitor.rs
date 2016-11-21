@@ -27,7 +27,7 @@ use syntex_syntax::codemap:: { Span, CodeMap };
 pub struct StructureVisitor<'ps> {
     pub codemap : & 'ps CodeMap,
     pub parentIsStruct : bool,
-    
+    pub parentIsUnion : bool,
     pub elements : Vec<StructureElement>,
 }
 
@@ -35,7 +35,7 @@ impl<'ps> StructureVisitor<'ps> {
     
     pub fn new(codemap : &'ps CodeMap) -> StructureVisitor<'ps> {
         StructureVisitor { 
-            codemap : codemap, parentIsStruct : false, elements : vec![]
+            codemap : codemap, parentIsStruct : false, parentIsUnion : false, elements : vec![]
         }
     }
     
@@ -131,20 +131,12 @@ impl<'ps> StructureVisitor<'ps> {
                 
                 useSpec.push_str("::{ ");
                 for pitem in pathListItem {
-                    let rename_;
-                    match pitem.node {
-                        PathListItemKind::Ident{ name , rename, id : _id } => {
-                            useSpec.push_str(&*name.name.as_str());
-                            rename_ = rename; 
-                        }
-                        PathListItemKind::Mod{ rename, id : _id } => {
-                            useSpec.push_str("self");
-                            rename_ = rename; 
-                        }
-                    };
-                    if rename_.is_some() {
+                    let pitem : PathListItem_ = pitem.node;
+                    
+                    useSpec.push_str(&*pitem.name.name.as_str());
+                    if let Some(rename) = pitem.rename {
                         useSpec.push_str(" as ");
-                        useSpec.push_str(&*rename_.unwrap().name.as_str());
+                        useSpec.push_str(&*rename.name.as_str());
                     }
                     useSpec.push_str(", ");
                 }
@@ -285,6 +277,11 @@ impl<'v> Visitor for StructureVisitor<'v> {
                 walk_item(self, item);
                 return;
             }
+            ItemKind::Union(ref _struct_definition, ref _generics) => {
+                self.parentIsUnion = true;
+                walk_item(self, item);
+                return;
+            }
             ItemKind::Trait(_, ref _generics, ref _bounds, ref _methods) => {
                 kind = StructureElementKind::Trait;
             }
@@ -312,6 +309,10 @@ impl<'v> Visitor for StructureVisitor<'v> {
         if self.parentIsStruct {
             kind = StructureElementKind::Struct;
             self.parentIsStruct = false;
+        }
+        if self.parentIsUnion {
+            kind = StructureElementKind::Union;
+            self.parentIsUnion = false;
         }
         
         self.writeElement_TODO(ident, kind, span, |_self : &mut Self| { 
@@ -567,6 +568,10 @@ r#"Struct { "MyStruct" { 0:0 0:35 } {} "" {} }"#);
     test_describe_structure("struct MyStruct { foo : u32, } ", 
 r#"Struct { "MyStruct" { 0:0 0:30 } {} "" {}
   Var { "foo" { 0:18 0:27 } {} "" {} }
+}"#);
+    test_describe_structure("union MyUnion { foo : u32, } ", 
+r#"Union { "MyUnion" { 0:0 0:28 } {} "" {}
+  Var { "foo" { 0:16 0:25 } {} "" {} }
 }"#);
     
     test_describe_structure("trait MyTrait { } ", r#"Trait { "MyTrait" { 0:0 0:17 } {} "" {} }"#);
