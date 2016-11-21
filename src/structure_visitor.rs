@@ -136,11 +136,11 @@ impl<'ps> StructureVisitor<'ps> {
 		    	for pitem in pathListItem {
 		    		let rename_;
 					match pitem.node {
-						PathListItem_::PathListIdent{ name , rename, id : _id } => {
+						PathListItemKind::Ident{ name , rename, id : _id } => {
 							useSpec.push_str(&*name.name.as_str());
 							rename_ = rename; 
 						}
-						PathListItem_::PathListMod{ rename, id : _id } => {
+						PathListItemKind::Mod{ rename, id : _id } => {
 							useSpec.push_str("self");
 							rename_ = rename; 
 						}
@@ -189,7 +189,7 @@ impl<'ps> StructureVisitor<'ps> {
 		};
 		type_desc.push_str(")");
 		
-		if let FunctionRetTy::Return(ref _ret) = fd.output {
+		if let FunctionRetTy::Ty(ref _ret) = fd.output {
 			if let Ok(ret_snippet) = self.codemap.span_to_snippet(fd.output.span()) {
 				type_desc.push_str(" -> ");
 				type_desc.push_str(&ret_snippet);
@@ -237,15 +237,15 @@ impl<'v> Visitor<'v> for StructureVisitor<'v> {
 		};
 		
 		match item.node {
-			ItemExternCrate(_opt_name) => {
+			ItemKind::ExternCrate(_opt_name) => {
 				kind = StructureElementKind::ExternCrate;
 			}
-			ItemUse(ref vp) => {
+			ItemKind::Use(ref vp) => {
 				self.write_ItemUse(vp, item.span);
 				return;
 			}
-			ItemStatic(ref typ, _, ref _expr) |
-			ItemConst(ref typ, ref _expr) => {
+			ItemKind::Static(ref typ, _, ref _expr) |
+			ItemKind::Const(ref typ, ref _expr) => {
 				
 				if let Ok(snippet) = self.codemap.span_to_snippet(typ.span) {
 					type_desc.push_str(&snippet);
@@ -253,7 +253,7 @@ impl<'v> Visitor<'v> for StructureVisitor<'v> {
 				self.writeElement(item.ident, StructureElementKind::Var, item.span, type_desc, noop_walkFn);
 				return;
 			}
-			ItemFn(ref declaration, unsafety, constness, abi, ref generics, ref body) => {
+			ItemKind::Fn(ref declaration, unsafety, constness, abi, ref generics, ref body) => {
 			    self.visit_fn(FnKind::ItemFn(item.ident, generics, unsafety, constness, abi, item.vis),
 			                     declaration,
 			                     body,
@@ -261,34 +261,34 @@ impl<'v> Visitor<'v> for StructureVisitor<'v> {
 			                     item.id);
 			    return;
 			}
-			ItemMod(ref _module) => {
+			ItemKind::Mod(ref _module) => {
 				kind = StructureElementKind::Mod;
 			}
-			ItemForeignMod(ref _foreign_module) => {
+			ItemKind::ForeignMod(ref _foreign_module) => {
 				kind = StructureElementKind::Mod;
 			}
-			ItemTy(ref _typ, ref _type_parameters) => {
+			ItemKind::Ty(ref _typ, ref _type_parameters) => {
 				kind = StructureElementKind::TypeAlias;
 			}
-			ItemEnum(ref _enum_definition, ref _type_parameters) => {
+			ItemKind::Enum(ref _enum_definition, ref _type_parameters) => {
 				kind = StructureElementKind::Enum;
 			}
-			ItemDefaultImpl(_, ref _trait_ref) => {
+			ItemKind::DefaultImpl(_, ref _trait_ref) => {
 				kind = StructureElementKind::Impl;
 			}
-			ItemImpl(_, _, ref _type_parameters, ref _opt_trait_reference, ref _typ, ref _impl_items) => {
+			ItemKind::Impl(_, _, ref _type_parameters, ref _opt_trait_reference, ref _typ, ref _impl_items) => {
 	         	kind = StructureElementKind::Impl;
 			}
-			ItemStruct(ref _struct_definition, ref _generics) => {
+			ItemKind::Struct(ref _struct_definition, ref _generics) => {
 				// Go straight in
 				self.parentIsStruct = true;
 				walk_item(self, item);
 				return;
 			}
-			ItemTrait(_, ref _generics, ref _bounds, ref _methods) => {
+			ItemKind::Trait(_, ref _generics, ref _bounds, ref _methods) => {
 				kind = StructureElementKind::Trait;
 			}
-			ItemMac(ref _mac) => {
+			ItemKind::Mac(ref _mac) => {
 				return;
 			}
 		}
@@ -334,16 +334,16 @@ impl<'v> Visitor<'v> for StructureVisitor<'v> {
 		let kind;
 		
 	    match ti.node {
-	        ConstTraitItem(ref _ty, ref _default) => {
+	        TraitItemKind::Const(ref _ty, ref _default) => {
 	        	kind = StructureElementKind::Var;
 	        }
-	        MethodTraitItem(ref sig, _) => {
+	        TraitItemKind::Method(ref sig, _) => {
 		        self.write_function_element(ti.ident, ti.span, &sig.decl, &|_self : &mut Self| { 
 					walk_trait_item(_self, ti);
 				});
 		        return;
 	        }
-	        TypeTraitItem(ref _bounds, ref _default) => {
+	        TraitItemKind::Type(ref _bounds, ref _default) => {
 	        	kind = StructureElementKind::TypeAlias;
 	        }
 	    }
@@ -400,10 +400,10 @@ impl<'v> Visitor<'v> for StructureVisitor<'v> {
 		let kind;
 		
 	    match foreign_item.node {
-	        ForeignItemFn(ref _function_declaration, ref _generics) => {
+	        ForeignItemKind::Fn(ref _function_declaration, ref _generics) => {
 	        	kind = StructureElementKind::Function;
 	        }
-	        ForeignItemStatic(ref _typ, _) => {
+	        ForeignItemKind::Static(ref _typ, _) => {
 	        	kind = StructureElementKind::Var;
 	        }
 	    }

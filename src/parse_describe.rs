@@ -19,7 +19,7 @@ use ::source_model::*;
 use ::syntex_syntax::syntax::ast;
 use ::syntex_syntax::parse::{ self, ParseSess };
 use ::syntex_syntax::visit;
-use ::syntex_syntax::codemap:: { self, Span, CodeMap};
+use ::syntex_syntax::codemap:: { self, Span, MultiSpan, CodeMap};
 use ::syntex_syntax::errors:: { Handler, RenderSpan, Level, emitter };
 
 use std::boxed::Box;
@@ -196,22 +196,26 @@ impl MessagesHandler {
 
 impl emitter::Emitter for MessagesHandler {
     
-    fn emit(&mut self, span: Option<Span>, msg: &str, code: Option<&str>, lvl: Level) {
+    fn emit(&mut self, multispan: Option<&MultiSpan>, msg: &str, code: Option<&str>, lvl: Level) {
         
         if let Some(code) = code {
                io::stderr().write_fmt(format_args!("Code: {}\n", code)).unwrap();
                panic!("What is code: Option<&str>??");
         }
         
-        let sourcerange = match span {
-            Some(span) => Some(SourceRange::new(&self.codemap, span)),
-            None => None,
-        };
+        let sourceranges = multispan.map(|multispan| -> Vec<Option<SourceRange>> {
+            multispan.spans.iter()
+                .map(|span| { Some(SourceRange::new(&self.codemap, *span))})
+                .collect()
+        });
+        let sourceranges = sourceranges.unwrap_or(vec![None]);
         
-        self.writeMessage_handled(sourcerange, msg, level_to_status_level(lvl));
+        for sourcerange in sourceranges {
+            self.writeMessage_handled(sourcerange, msg, level_to_status_level(lvl));
+        }
     }
     
-    fn custom_emit(&mut self, _: RenderSpan, msg: &str, lvl: Level) {
+    fn custom_emit(&mut self, _sp: &RenderSpan, msg: &str, lvl: Level) {
         match lvl { Level::Help | Level::Note => return, _ => () }
         
         self.writeMessage_handled(None, msg, level_to_status_level(lvl));
@@ -221,6 +225,7 @@ impl emitter::Emitter for MessagesHandler {
 
 fn level_to_status_level(lvl: Level) -> Severity {
     match lvl { 
+        Level::PhaseFatal => panic!("Level::PhaseFatal"),
         Level::Bug => panic!("Level::BUG"), 
         Level::Cancelled => panic!("Level::CANCELLED"),
         Level::Help | Level::Note => Severity::INFO, 
@@ -402,14 +407,22 @@ mod parse_describe_tests {
         
         test_parse_analysis("fn foo(\n  blah", r#"
 { ERROR { 1:6 1:6 } "this file contains an un-closed delimiter" }
-{ INFO { 0:6 0:7 } "did you mean to close this delimiter?" }"#);
+{ INFO { 0:6 0:7 } "did you mean to close this delimiter?" }"#
+        );
         
         // Test a lexer panic
         test_parse_analysis("const a = '", 
-            r#"{ ERROR { 0:10 0:11 } "character literal may only contain one codepoint: '" }"#);
+            r#"{ ERROR { 0:10 0:11 } "character literal may only contain one codepoint: '" }"#
+        );
         
-//        test_parse_analysis("pub extern crate futures;", 
-//            r#""#);
+        if true { return }; // TODO
+        test_parse_analysis("pub extern crate my_crate;", 
+            r#""#
+        );
+        // test `?` syntax shorthand for try:
+        test_parse_analysis("fn foo() { 123? }", 
+            r#""#
+        );
     }
     
     fn test_parse_analysis(source : &str, expected_msgs : &str) {
