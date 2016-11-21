@@ -3,7 +3,8 @@ name = "rainicorn"
 version = "1.2.0"
 
 [dependencies]
-syntex_syntax = "0.34.0"
+syntex_errors = "0.38.0"
+syntex_syntax = "0.38.0"
 rustdt_util ="0.2.3"
 
 [[bin]]

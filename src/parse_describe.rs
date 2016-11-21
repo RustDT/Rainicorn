@@ -12,26 +12,29 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use ::util::core::*;
-use ::util::string::*;
-use ::source_model::*;
+use util::core::*;
+use util::string::*;
+use source_model::*;
 
-use ::syntex_syntax::syntax::ast;
-use ::syntex_syntax::parse::{ self, ParseSess };
-use ::syntex_syntax::visit;
-use ::syntex_syntax::codemap:: { self, MultiSpan, CodeMap};
-use ::syntex_syntax::errors:: { Handler, RenderSpan, Level, emitter };
+use syntex_syntax::syntax::ast;
+use syntex_syntax::parse::{ self, ParseSess };
+use syntex_syntax::visit;
+use syntex_syntax::codemap:: { self, MultiSpan, CodeMap};
+use syntex_errors::{ Handler, RenderSpan, Level, emitter };
 
 use std::boxed::Box;
 use std::path::Path;
 
-use ::token_writer::TokenWriter;
+use token_writer::TokenWriter;
 
 use std::cell::RefCell;
 use std::rc::*;
 use std::io;
 use std::io::Write;
 use std::fmt;
+use std::path::PathBuf;
+use std::env;
+
 
 /* -----------------  ----------------- */
 
@@ -116,6 +119,14 @@ impl codemap::FileLoader for DummyFileLoader {
         return path.file_name() == Some(self.modName);
     }
     
+    fn abs_path(&self, path: &Path) -> Option<PathBuf> {
+        if path.is_absolute() {
+            Some(path.to_path_buf())
+        } else {
+            env::current_dir().ok().map(|cwd| cwd.join(path))
+        }
+    }
+    
     fn read_file(&self, _path: &Path) -> io::Result<String> {
         Ok(String::new())
     }
@@ -157,7 +168,7 @@ pub fn parse_crate_do<'a>(source : &str, sess : &'a ParseSess) -> parse::PResult
     
 //    We inlined: let mut parser = parse::new_parser_from_source_str(&sess, cfg, name, source); 
 
-    let filemap = sess.codemap().new_filemap(name, source);
+    let filemap = sess.codemap().new_filemap(name, None, source);
     
     // filemap_to_tts but without a panic
     let tts =

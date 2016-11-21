@@ -207,7 +207,7 @@ impl<'ps> StructureVisitor<'ps> {
     
 }
 
-impl<'v> Visitor<'v> for StructureVisitor<'v> {
+impl<'v> Visitor for StructureVisitor<'v> {
     
     fn visit_name(&mut self, _span: Span, _name: Name) {
         // Nothing to do.
@@ -216,7 +216,7 @@ impl<'v> Visitor<'v> for StructureVisitor<'v> {
         walk_ident(self, span, ident);
     }
     
-    fn visit_mod(&mut self, m: &'v Mod, _span: Span, _nodeid: NodeId) {
+    fn visit_mod(&mut self, m: &Mod, _span: Span, _nodeid: NodeId) {
         
 //        let sr = &SourceRange::new(self.codemap, span);
 //        self.writeElement_handled("_file_", StructureElementKind::File, sr, |_self : &mut Self| { 
@@ -225,7 +225,7 @@ impl<'v> Visitor<'v> for StructureVisitor<'v> {
         walk_mod(self, m);
     }
     
-    fn visit_item(&mut self, item: &'v Item) {
+    fn visit_item(&mut self, item: &Item) {
         
         let kind;
         let mut type_desc = "".to_string();
@@ -288,7 +288,8 @@ impl<'v> Visitor<'v> for StructureVisitor<'v> {
             ItemKind::Trait(_, ref _generics, ref _bounds, ref _methods) => {
                 kind = StructureElementKind::Trait;
             }
-            ItemKind::Mac(ref _mac) => {
+            ItemKind::Mac(ref mac) => {
+                self.visit_mac(mac);
                 return;
             }
         }
@@ -296,17 +297,17 @@ impl<'v> Visitor<'v> for StructureVisitor<'v> {
         self.writeElement(item.ident, kind, item.span, type_desc, walkFn);
     }
     
-    fn visit_enum_def(&mut self, enum_def: &'v EnumDef, generics: &'v Generics, nodeid: NodeId, _span: Span) {
+    fn visit_enum_def(&mut self, enum_def: &EnumDef, generics: &Generics, nodeid: NodeId, _span: Span) {
         // This element is covered by an item definition
         walk_enum_def(self, enum_def, generics, nodeid)
     }
     
-    fn visit_variant(&mut self, v: &'v Variant, g: &'v Generics, nodeid: NodeId) {
+    fn visit_variant(&mut self, v: &Variant, g: &Generics, nodeid: NodeId) {
         // This element is covered by an enum_def call
         walk_variant(self, v, g, nodeid);
     }
     
-    fn visit_variant_data(&mut self, s: &'v VariantData, ident: Ident, _: &'v Generics, _: NodeId, span: Span) {
+    fn visit_variant_data(&mut self, s: &VariantData, ident: Ident, _: &Generics, _: NodeId, span: Span) {
         let mut kind = StructureElementKind::EnumVariant;
         if self.parentIsStruct {
             kind = StructureElementKind::Struct;
@@ -318,7 +319,7 @@ impl<'v> Visitor<'v> for StructureVisitor<'v> {
         });
     }
     
-    fn visit_struct_field(&mut self, sf: &'v StructField) {
+    fn visit_struct_field(&mut self, sf: &StructField) {
         if let Some(ident) = sf.ident {
             self.writeElement_TODO(ident, StructureElementKind::Var, sf.span, |_self : &mut Self| { 
                 walk_struct_field(_self, sf); 
@@ -326,7 +327,7 @@ impl<'v> Visitor<'v> for StructureVisitor<'v> {
         }
     }
     
-    fn visit_trait_item(&mut self, ti: &'v TraitItem) {
+    fn visit_trait_item(&mut self, ti: &TraitItem) {
         let kind;
         
         match ti.node {
@@ -342,6 +343,10 @@ impl<'v> Visitor<'v> for StructureVisitor<'v> {
             TraitItemKind::Type(ref _bounds, ref _default) => {
                 kind = StructureElementKind::TypeAlias;
             }
+            TraitItemKind::Macro(ref mac) => {
+                self.visit_mac(mac);
+                return;
+            }
         }
         
         self.writeElement_TODO(ti.ident, kind, ti.span, |_self : &mut Self| { 
@@ -349,7 +354,7 @@ impl<'v> Visitor<'v> for StructureVisitor<'v> {
         });
     }
     
-    fn visit_impl_item(&mut self, ii: &'v ImplItem) {
+    fn visit_impl_item(&mut self, ii: &ImplItem) {
         let kind;
         
         match ii.node {
@@ -373,7 +378,7 @@ impl<'v> Visitor<'v> for StructureVisitor<'v> {
     
     /* ----------------- Function ----------------- */
     
-    fn visit_fn(&mut self, fk: FnKind<'v>, fd: &'v FnDecl, b: &'v Block, span: Span, _nodeid: NodeId) {
+    fn visit_fn(&mut self, fk: FnKind, fd: &FnDecl, b: &Block, span: Span, _nodeid: NodeId) {
         
         let ident : Ident;
         
@@ -392,7 +397,7 @@ impl<'v> Visitor<'v> for StructureVisitor<'v> {
         });
     }
     
-    fn visit_foreign_item(&mut self, foreign_item: &'v ForeignItem) { 
+    fn visit_foreign_item(&mut self, foreign_item: &ForeignItem) { 
         let kind;
         
         match foreign_item.node {
@@ -410,56 +415,53 @@ impl<'v> Visitor<'v> for StructureVisitor<'v> {
     }
     
     
-    fn visit_trait_ref(&mut self, t: &'v TraitRef) { 
+    fn visit_trait_ref(&mut self, t: &TraitRef) { 
         walk_trait_ref(self, t) 
     }
-    fn visit_ty_param_bound(&mut self, bounds: &'v TyParamBound) {
+    fn visit_ty_param_bound(&mut self, bounds: &TyParamBound) {
         walk_ty_param_bound(self, bounds)
     }
-    fn visit_poly_trait_ref(&mut self, t: &'v PolyTraitRef, m: &'v TraitBoundModifier) {
+    fn visit_poly_trait_ref(&mut self, t: &PolyTraitRef, m: &TraitBoundModifier) {
         walk_poly_trait_ref(self, t, m)
     }
     
-    fn visit_lifetime(&mut self, lifetime: &'v Lifetime) {
+    fn visit_lifetime(&mut self, lifetime: &Lifetime) {
         walk_lifetime(self, lifetime)
     }
-    fn visit_lifetime_def(&mut self, lifetime: &'v LifetimeDef) {
+    fn visit_lifetime_def(&mut self, lifetime: &LifetimeDef) {
         walk_lifetime_def(self, lifetime)
     }
     
-    fn visit_local(&mut self, l: &'v Local) { 
+    fn visit_local(&mut self, l: &Local) { 
         walk_local(self, l) 
     }
-    fn visit_block(&mut self, b: &'v Block) { 
+    fn visit_block(&mut self, b: &Block) { 
         walk_block(self, b) 
     }
-    fn visit_stmt(&mut self, s: &'v Stmt) { 
+    fn visit_stmt(&mut self, s: &Stmt) { 
         walk_stmt(self, s) 
     }
-    fn visit_arm(&mut self, a: &'v Arm) { 
+    fn visit_arm(&mut self, a: &Arm) { 
         walk_arm(self, a) 
     }
-    fn visit_pat(&mut self, p: &'v Pat) { 
+    fn visit_pat(&mut self, p: &Pat) { 
         walk_pat(self, p) 
     }
-    fn visit_decl(&mut self, d: &'v Decl) { 
-        walk_decl(self, d) 
-    }
-    fn visit_expr(&mut self, _ex: &'v Expr) {
+    fn visit_expr(&mut self, _ex: &Expr) {
         // Comment, no need to visit node insinde expressions 
         //walk_expr(self, ex) 
     }
-    fn visit_expr_post(&mut self, _ex: &'v Expr) { 
+    fn visit_expr_post(&mut self, _ex: &Expr) { 
     }
-    fn visit_ty(&mut self, t: &'v Ty) { 
+    fn visit_ty(&mut self, t: &Ty) { 
         walk_ty(self, t) 
     }
-    fn visit_generics(&mut self, g: &'v Generics) { 
+    fn visit_generics(&mut self, g: &Generics) { 
         walk_generics(self, g) 
     }
     
     
-    fn visit_mac(&mut self, _mac: &'v Mac) {
+    fn visit_mac(&mut self, _mac: &Mac) {
         //panic!("visit_mac disabled by default");
         
         // NB: see note about macros above.
@@ -468,28 +470,28 @@ impl<'v> Visitor<'v> for StructureVisitor<'v> {
         // definition in your trait impl:
         // visit::walk_mac(self, _mac)
     }
-    fn visit_path(&mut self, path: &'v Path, _id: NodeId) {
+    fn visit_path(&mut self, path: &Path, _id: NodeId) {
         walk_path(self, path)
     }
-    fn visit_path_list_item(&mut self, prefix: &'v Path, item: &'v PathListItem) {
+    fn visit_path_list_item(&mut self, prefix: &Path, item: &PathListItem) {
         walk_path_list_item(self, prefix, item)
     }
-    fn visit_path_segment(&mut self, path_span: Span, path_segment: &'v PathSegment) {
+    fn visit_path_segment(&mut self, path_span: Span, path_segment: &PathSegment) {
         walk_path_segment(self, path_span, path_segment)
     }
-    fn visit_path_parameters(&mut self, path_span: Span, path_parameters: &'v PathParameters) {
+    fn visit_path_parameters(&mut self, path_span: Span, path_parameters: &PathParameters) {
         walk_path_parameters(self, path_span, path_parameters)
     }
-    fn visit_assoc_type_binding(&mut self, type_binding: &'v TypeBinding) {
+    fn visit_assoc_type_binding(&mut self, type_binding: &TypeBinding) {
         walk_assoc_type_binding(self, type_binding)
     }
-    fn visit_attribute(&mut self, _attr: &'v Attribute) {
+    fn visit_attribute(&mut self, _attr: &Attribute) {
     }
-    fn visit_macro_def(&mut self, macro_def: &'v MacroDef) {
+    fn visit_macro_def(&mut self, macro_def: &MacroDef) {
         walk_macro_def(self, macro_def)
     }
     
-    fn visit_vis(&mut self, vis: &'v Visibility) {
+    fn visit_vis(&mut self, vis: &Visibility) {
         walk_vis(self, vis)
     }
 }
