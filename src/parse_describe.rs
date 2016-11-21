@@ -165,7 +165,6 @@ pub fn parse_crate_do<'a>(source : &str, sess : &'a ParseSess) -> parse::PResult
 {
     let source = source.to_string();
     
-    let cfg = vec![];
     let name = "_file_module_".to_string();
     
 //    We inlined: let mut parser = parse::new_parser_from_source_str(&sess, cfg, name, source); 
@@ -175,15 +174,14 @@ pub fn parse_crate_do<'a>(source : &str, sess : &'a ParseSess) -> parse::PResult
     // filemap_to_tts but without a panic
     let tts =
     {
-        let cfg = Vec::new();
         let srdr = parse::lexer::StringReader::new(&sess.span_diagnostic, filemap);
-        let mut p1 = parse::parser::Parser::new(sess, cfg, Box::new(srdr));
+        let mut p1 = parse::parser::Parser::new(sess, Box::new(srdr));
         
         try!(p1.parse_all_token_trees())
     };
     
     let trdr = parse::lexer::new_tt_reader(&sess.span_diagnostic, None, tts);
-    let mut parser = parse::parser::Parser::new(sess, cfg, Box::new(trdr));
+    let mut parser = parse::parser::Parser::new(sess, Box::new(trdr));
     
     return parser.parse_crate_mod();
 }
