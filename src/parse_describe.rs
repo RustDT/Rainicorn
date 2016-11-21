@@ -401,8 +401,8 @@ mod parse_describe_tests {
         test_parse_analysis(" #blah ", r#"{ ERROR { 0:2 0:6 } "expected `[`, found `blah`" }"#);
         
         test_parse_analysis("fn foo(\n  blah", r#"
-    { ERROR { 1:6 1:6 } "this file contains an un-closed delimiter" }
-    { INFO { 0:6 0:7 } "did you mean to close this delimiter?" }"#);
+{ ERROR { 1:6 1:6 } "this file contains an un-closed delimiter" }
+{ INFO { 0:6 0:7 } "did you mean to close this delimiter?" }"#);
         
         // Test a lexer panic
         test_parse_analysis("const a = '", 
@@ -419,6 +419,7 @@ mod parse_describe_tests {
         result = assert_surrounding_string("RUST_PARSE_DESCRIBE 1.0 {", result, "}");
         
         result = assert_starts_with("MESSAGES {", result.trim());
+        expected_msgs.replace("\r\n", "\n");
         result = assert_starts_with(expected_msgs.trim(), result.trim());
         result = assert_starts_with("}", result.trim());
         
@@ -435,7 +436,10 @@ mod parse_describe_tests {
     }
     
     fn assert_starts_with<'a> (start : &str, string : &'a str) -> &'a str {
-        assert!(string.starts_with(start), "`{}` does not start with `{}`", string, start);
+        if !string.starts_with(start) {
+            println!("\nThe string:\n{}\n does not start with:\n`{}`", string, start);
+            assert!(false);
+        }
         return &string[start.len() .. ];
     }
     
