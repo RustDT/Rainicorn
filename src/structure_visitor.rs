@@ -173,15 +173,18 @@ impl<'ps> StructureVisitor<'ps> {
             }
             needs_sep = true;
             
-            if let Ok(snippet) = self.codemap.span_to_snippet(pat_span) {
-                if snippet == "self" {
+            if let Ok(snippet) = self.codemap.span_to_snippet(arg.ty.span) {
+                if !snippet.is_empty() {
                     type_desc.push_str(&snippet);
                     continue;
                 }
             }
             
-            if let Ok(snippet) = self.codemap.span_to_snippet(arg.ty.span) {
-                type_desc.push_str(&snippet);
+            if let Ok(snippet) = self.codemap.span_to_snippet(pat_span) {
+                if snippet.ends_with("self") {
+                    type_desc.push_str(&snippet);
+                    continue;
+                }
             }
         };
         type_desc.push_str(")");
@@ -423,9 +426,6 @@ impl<'v> Visitor<'v> for StructureVisitor<'v> {
     fn visit_lifetime_def(&mut self, lifetime: &'v LifetimeDef) {
         walk_lifetime_def(self, lifetime)
     }
-    fn visit_explicit_self(&mut self, es: &'v ExplicitSelf) {
-        walk_explicit_self(self, es)
-    }
     
     fn visit_local(&mut self, l: &'v Local) { 
         walk_local(self, l) 
@@ -489,6 +489,9 @@ impl<'v> Visitor<'v> for StructureVisitor<'v> {
         walk_macro_def(self, macro_def)
     }
     
+    fn visit_vis(&mut self, vis: &'v Visibility) {
+        walk_vis(self, vis)
+    }
 }
 
 
@@ -539,6 +542,9 @@ r#"Mod { "myMod" { 0:0 0:34 } {} "" {}
         r#"Function { "xx" { 0:0 0:26 } {} "(&str) -> u32" {} }"#);
     test_describe_structure("fn xx(blah : Vec<u32>, x : &'v str) -> u32 { }", 
         r#"Function { "xx" { 0:0 0:46 } {} "(Vec<u32>, &'v str) -> u32" {} }"#);
+    // Test "deceiving" case
+    test_describe_structure("fn xx(my_self : &str) -> u32 { }", 
+        r#"Function { "xx" { 0:0 0:32 } {} "(&str) -> u32" {} }"#);
     
     test_describe_structure("type MyType = &u32<asd>;", r#"TypeAlias { "MyType" { 0:0 0:24 } {} "" {} }"#);
     
@@ -569,7 +575,7 @@ r#"Trait { "MyTrait" { 0:0 0:33 } {} "" {}
     test_describe_structure("trait MyTrait : Foo { type N: fmt::Display; fn xxx(&self); const foo :u32 = 3; } ", 
 r#"Trait { "MyTrait" { 0:0 0:80 } {} "" {}
   TypeAlias { "N" { 0:22 0:43 } {} "" {} }
-  Function { "xxx" { 0:44 0:58 } {} "(self)" {} }
+  Function { "xxx" { 0:44 0:58 } {} "(&self)" {} }
   Var { "foo" { 0:59 0:78 } {} "" {} }
 }"#);
     

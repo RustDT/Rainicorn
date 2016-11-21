@@ -194,33 +194,35 @@ impl MessagesHandler {
     
 }
 
-impl emitter::Emitter for MessagesHandler {
+impl emitter::CoreEmitter for MessagesHandler {
     
-    fn emit(&mut self, multispan: Option<&MultiSpan>, msg: &str, code: Option<&str>, lvl: Level) {
+    fn emit_message(
+        &mut self,
+        rsp: &RenderSpan,
+        msg: &str,
+        code: Option<&str>,
+        lvl: Level,
+        _is_header: bool,
+        _show_snippet: bool
+    ) { 
+        let multispan : &MultiSpan = match *rsp {
+            RenderSpan::FullSpan(ref multispan) => multispan,
+            _ => return
+        };
         
         if let Some(code) = code {
-               io::stderr().write_fmt(format_args!("Code: {}\n", code)).unwrap();
-               panic!("What is code: Option<&str>??");
+            io::stderr().write_fmt(format_args!("Code: {}\n", code)).unwrap();
+            panic!("What is code: Option<&str>??");
         }
         
-        let sourceranges = multispan.map(|multispan| -> Vec<Option<SourceRange>> {
-            multispan.spans.iter()
-                .map(|span| { Some(SourceRange::new(&self.codemap, *span))})
-                .collect()
-        });
-        let sourceranges = sourceranges.unwrap_or(vec![None]);
+        let sourceranges : Vec<_> = multispan.primary_spans().iter()
+            .map(|span| -> SourceRange { SourceRange::new(&self.codemap, *span)})
+            .collect();
         
         for sourcerange in sourceranges {
-            self.writeMessage_handled(sourcerange, msg, level_to_status_level(lvl));
+            self.writeMessage_handled(Some(sourcerange), msg, level_to_status_level(lvl));
         }
     }
-    
-    fn custom_emit(&mut self, _sp: &RenderSpan, msg: &str, lvl: Level) {
-        match lvl { Level::Help | Level::Note => return, _ => () }
-        
-        self.writeMessage_handled(None, msg, level_to_status_level(lvl));
-    }
-    
 }
 
 fn level_to_status_level(lvl: Level) -> Severity {
