@@ -36,63 +36,63 @@ use std::fmt;
 /* -----------------  ----------------- */
 
 pub fn parse_analysis_forStdout(source : &str) {
-	parse_analysis(source, StdoutWrite(io::stdout())).ok();
-	println!("");
-	io::stdout().flush().ok();
+    parse_analysis(source, StdoutWrite(io::stdout())).ok();
+    println!("");
+    io::stdout().flush().ok();
 }
 
 pub fn parse_analysis<T : fmt::Write + 'static>(source : &str, out : T) -> GResult<T> {
-	let (messages, elements) = parse_crate_with_messages(source);
-	 
-	let outRc = Rc::new(RefCell::new(out));
-	try!(write_parse_analysis_do(messages, elements, outRc.clone()));
-	let res = unwrap_Rc_RefCell(outRc);
-	return Ok(res);
+    let (messages, elements) = parse_crate_with_messages(source);
+    
+    let outRc = Rc::new(RefCell::new(out));
+    try!(write_parse_analysis_do(messages, elements, outRc.clone()));
+    let res = unwrap_Rc_RefCell(outRc);
+    return Ok(res);
 }
 
 use std::thread;
 use std::sync::{Arc, Mutex};
 
 pub fn parse_crate_with_messages(source: &str) -> (Vec<SourceMessage>, Vec<StructureElement>) {
-	
-	let messages = Arc::new(Mutex::new(vec![]));
-	let elements =
-	{
-		let source = String::from(source);
-		let messages = messages.clone();
-		
-		let worker_thread = thread::Builder::new().name("parser_thread".to_string()).spawn(move || {
-			parse_crate_with_messages_do(&source, messages)
-		}).unwrap();
-		
-		worker_thread.join().unwrap_or(vec![])
-	};
-	
-	let messages : Mutex<Vec<SourceMessage>> = Arc::try_unwrap(messages).ok().unwrap(); 
-	let messages : Vec<SourceMessage> = messages.into_inner().unwrap();
-	
-	return (messages, elements);
+    
+    let messages = Arc::new(Mutex::new(vec![]));
+    let elements =
+    {
+        let source = String::from(source);
+        let messages = messages.clone();
+        
+        let worker_thread = thread::Builder::new().name("parser_thread".to_string()).spawn(move || {
+            parse_crate_with_messages_do(&source, messages)
+        }).unwrap();
+        
+        worker_thread.join().unwrap_or(vec![])
+    };
+    
+    let messages : Mutex<Vec<SourceMessage>> = Arc::try_unwrap(messages).ok().unwrap(); 
+    let messages : Vec<SourceMessage> = messages.into_inner().unwrap();
+    
+    return (messages, elements);
 }
 
 pub fn parse_crate_with_messages_do(source: &str, messages: Arc<Mutex<Vec<SourceMessage>>>) 
-	-> Vec<StructureElement> 
+    -> Vec<StructureElement> 
 {
-	use ::structure_visitor::StructureVisitor;
-	
-	let mut elements = vec![];
-	
-	let fileLoader = Box::new(DummyFileLoader::new());
-	let codemap = Rc::new(CodeMap::with_file_loader(fileLoader));
-	
-	let krate = parse_crate(source, codemap.clone(), messages.clone());
-	
-	if let Some(krate) = krate {
-		let mut visitor : StructureVisitor = StructureVisitor::new(&codemap);  
-		visit::walk_crate(&mut visitor, &krate);
-		
-		elements = visitor.elements;
-	}
-	return elements;
+    use ::structure_visitor::StructureVisitor;
+    
+    let mut elements = vec![];
+    
+    let fileLoader = Box::new(DummyFileLoader::new());
+    let codemap = Rc::new(CodeMap::with_file_loader(fileLoader));
+    
+    let krate = parse_crate(source, codemap.clone(), messages.clone());
+    
+    if let Some(krate) = krate {
+        let mut visitor : StructureVisitor = StructureVisitor::new(&codemap);  
+        visit::walk_crate(&mut visitor, &krate);
+        
+        elements = visitor.elements;
+    }
+    return elements;
 }
 
 /* -----------------  ----------------- */
@@ -102,20 +102,20 @@ use std::ffi::OsStr;
 
 /// A FileLoader that loads any file successfully
 pub struct DummyFileLoader {
-   	modName : &'static OsStr,
+       modName : &'static OsStr,
 }
 
 impl DummyFileLoader {
-	fn new() -> DummyFileLoader {
-		DummyFileLoader { modName : OsStr::new("mod.rs") } 
-	}
+    fn new() -> DummyFileLoader {
+        DummyFileLoader { modName : OsStr::new("mod.rs") } 
+    }
 }
 
 impl codemap::FileLoader for DummyFileLoader {
     fn file_exists(&self, path: &Path) -> bool {
-    	return path.file_name() == Some(self.modName);
+        return path.file_name() == Some(self.modName);
     }
-	
+    
     fn read_file(&self, _path: &Path) -> io::Result<String> {
         Ok(String::new())
     }
@@ -123,110 +123,110 @@ impl codemap::FileLoader for DummyFileLoader {
 
 
 struct MessagesHandler {
-	codemap : Rc<CodeMap>,
-	messages : Arc<Mutex<Vec<SourceMessage>>>,
+    codemap : Rc<CodeMap>,
+    messages : Arc<Mutex<Vec<SourceMessage>>>,
 }
 
 
 fn parse_crate<'a>(source: &str, codemap: Rc<CodeMap>, messages: Arc<Mutex<Vec<SourceMessage>>>) -> Option<ast::Crate> 
 {
-	let emitter = MessagesHandler::new(codemap.clone(), messages.clone());
-	
-	let handler = Handler::with_emitter(true, false, Box::new(emitter));
-	let sess = ParseSess::with_span_handler(handler, codemap.clone());
-	
-	let krate_result = parse_crate_do(source, &sess);
-	
-	return match krate_result {
-		Ok(_krate) => { 
-			Some(_krate) 
-		}
-		Err(mut db) => { 
-			db.emit();
-			None
-		}
-	}
+    let emitter = MessagesHandler::new(codemap.clone(), messages.clone());
+    
+    let handler = Handler::with_emitter(true, false, Box::new(emitter));
+    let sess = ParseSess::with_span_handler(handler, codemap.clone());
+    
+    let krate_result = parse_crate_do(source, &sess);
+    
+    return match krate_result {
+        Ok(_krate) => { 
+            Some(_krate) 
+        }
+        Err(mut db) => { 
+            db.emit();
+            None
+        }
+    }
 }
 
 pub fn parse_crate_do<'a>(source : &str, sess : &'a ParseSess) -> parse::PResult<'a, ast::Crate> 
 {
-	let source = source.to_string();
-	
-	let cfg = vec![];
-	let name = "_file_module_".to_string();
-	
-//	We inlined: let mut parser = parse::new_parser_from_source_str(&sess, cfg, name, source); 
+    let source = source.to_string();
+    
+    let cfg = vec![];
+    let name = "_file_module_".to_string();
+    
+//    We inlined: let mut parser = parse::new_parser_from_source_str(&sess, cfg, name, source); 
 
-	let filemap = sess.codemap().new_filemap(name, source);
-	
-	// filemap_to_tts but without a panic
-	let tts =
-	{
-	    let cfg = Vec::new();
-	    let srdr = parse::lexer::StringReader::new(&sess.span_diagnostic, filemap);
-	    let mut p1 = parse::parser::Parser::new(sess, cfg, Box::new(srdr));
-	    
-	    try!(p1.parse_all_token_trees())
-	};
-	
+    let filemap = sess.codemap().new_filemap(name, source);
+    
+    // filemap_to_tts but without a panic
+    let tts =
+    {
+        let cfg = Vec::new();
+        let srdr = parse::lexer::StringReader::new(&sess.span_diagnostic, filemap);
+        let mut p1 = parse::parser::Parser::new(sess, cfg, Box::new(srdr));
+        
+        try!(p1.parse_all_token_trees())
+    };
+    
     let trdr = parse::lexer::new_tt_reader(&sess.span_diagnostic, None, None, tts);
     let mut parser = parse::parser::Parser::new(sess, cfg, Box::new(trdr));
-	
-	return parser.parse_crate_mod();
+    
+    return parser.parse_crate_mod();
 }
 
 
 
 
 impl MessagesHandler {
-	
-	fn new(codemap: Rc<CodeMap>, messages: Arc<Mutex<Vec<SourceMessage>>>) -> MessagesHandler {
-		MessagesHandler { codemap : codemap, messages : messages }
-	}
-	
-	fn writeMessage_handled(&mut self, sourcerange : Option<SourceRange>, msg: &str, severity: Severity) {
-		
-		let msg = SourceMessage{ severity : severity , sourcerange : sourcerange,  message : String::from(msg) };
-		
-		let mut messages = self.messages.lock().unwrap();
-		messages.push(msg);
-	}
-	
+    
+    fn new(codemap: Rc<CodeMap>, messages: Arc<Mutex<Vec<SourceMessage>>>) -> MessagesHandler {
+        MessagesHandler { codemap : codemap, messages : messages }
+    }
+    
+    fn writeMessage_handled(&mut self, sourcerange : Option<SourceRange>, msg: &str, severity: Severity) {
+        
+        let msg = SourceMessage{ severity : severity , sourcerange : sourcerange,  message : String::from(msg) };
+        
+        let mut messages = self.messages.lock().unwrap();
+        messages.push(msg);
+    }
+    
 }
 
 impl emitter::Emitter for MessagesHandler {
-	
+    
     fn emit(&mut self, span: Option<Span>, msg: &str, code: Option<&str>, lvl: Level) {
-    	
-    	if let Some(code) = code {
-   			io::stderr().write_fmt(format_args!("Code: {}\n", code)).unwrap();
-   			panic!("What is code: Option<&str>??");
-    	}
-    	
-		let sourcerange = match span {
-			Some(span) => Some(SourceRange::new(&self.codemap, span)),
-			None => None,
-		};
-		
-		self.writeMessage_handled(sourcerange, msg, level_to_status_level(lvl));
+        
+        if let Some(code) = code {
+               io::stderr().write_fmt(format_args!("Code: {}\n", code)).unwrap();
+               panic!("What is code: Option<&str>??");
+        }
+        
+        let sourcerange = match span {
+            Some(span) => Some(SourceRange::new(&self.codemap, span)),
+            None => None,
+        };
+        
+        self.writeMessage_handled(sourcerange, msg, level_to_status_level(lvl));
     }
     
     fn custom_emit(&mut self, _: RenderSpan, msg: &str, lvl: Level) {
-    	match lvl { Level::Help | Level::Note => return, _ => () }
-    	
-    	self.writeMessage_handled(None, msg, level_to_status_level(lvl));
+        match lvl { Level::Help | Level::Note => return, _ => () }
+        
+        self.writeMessage_handled(None, msg, level_to_status_level(lvl));
     }
-	
+    
 }
 
 fn level_to_status_level(lvl: Level) -> Severity {
-	match lvl { 
-		Level::Bug => panic!("Level::BUG"), 
-		Level::Cancelled => panic!("Level::CANCELLED"),
-		Level::Help | Level::Note => Severity::INFO, 
-		Level::Warning => Severity::WARNING,
-		Level::Error | Level::Fatal => Severity::ERROR,
-	}
+    match lvl { 
+        Level::Bug => panic!("Level::BUG"), 
+        Level::Cancelled => panic!("Level::CANCELLED"),
+        Level::Help | Level::Note => Severity::INFO, 
+        Level::Warning => Severity::WARNING,
+        Level::Error | Level::Fatal => Severity::ERROR,
+    }
 }
 
 impl MessagesHandler {
@@ -236,126 +236,126 @@ impl MessagesHandler {
 /* ----------------- describe writting ----------------- */
 
 pub fn write_parse_analysis_do(messages: Vec<SourceMessage>, elements: Vec<StructureElement>, 
-	out : Rc<RefCell<fmt::Write>>) -> Void {
-	
-	let mut tokenWriter = TokenWriter { out : out };
-	
-	try!(tokenWriter.writeRaw("RUST_PARSE_DESCRIBE 1.0 {\n"));
-	try!(write_parse_analysis_contents(messages, elements, &mut tokenWriter));
-	try!(tokenWriter.writeRaw("\n}"));
-	
-	Ok(())
+    out : Rc<RefCell<fmt::Write>>) -> Void {
+    
+    let mut tokenWriter = TokenWriter { out : out };
+    
+    try!(tokenWriter.writeRaw("RUST_PARSE_DESCRIBE 1.0 {\n"));
+    try!(write_parse_analysis_contents(messages, elements, &mut tokenWriter));
+    try!(tokenWriter.writeRaw("\n}"));
+    
+    Ok(())
 }
 
 pub fn write_parse_analysis_contents(messages: Vec<SourceMessage>, elements: Vec<StructureElement>, 
-	tokenWriter : &mut TokenWriter) -> Void {
-	
-	try!(tokenWriter.writeRaw("MESSAGES {\n"));
-	for msg in messages {
-		try!(output_message(tokenWriter, msg.sourcerange, &msg.message, &msg.severity));
-	}
-	try!(tokenWriter.writeRaw("}\n"));
-	
-	
-	for element in elements {
-		try!(write_structure_element(tokenWriter, &element, 0));
-	}
-	
-	Ok(())
+    tokenWriter : &mut TokenWriter) -> Void {
+    
+    try!(tokenWriter.writeRaw("MESSAGES {\n"));
+    for msg in messages {
+        try!(output_message(tokenWriter, msg.sourcerange, &msg.message, &msg.severity));
+    }
+    try!(tokenWriter.writeRaw("}\n"));
+    
+    
+    for element in elements {
+        try!(write_structure_element(tokenWriter, &element, 0));
+    }
+    
+    Ok(())
 }
 
 fn output_message(tokenWriter: &mut TokenWriter, opt_sr : Option<SourceRange>, msg: & str, lvl: &Severity) 
-	-> Void
+    -> Void
 {
-	
-	try!(tokenWriter.writeRaw("{ "));
-	
-	try!(outputString_Level(&lvl, tokenWriter));
-	
-	try!(outputString_optSourceRange(&opt_sr, tokenWriter));
-	
-	try!(tokenWriter.writeStringToken(msg));
-	
-	try!(tokenWriter.writeRaw("}\n"));
-	
-	Ok(())
+    
+    try!(tokenWriter.writeRaw("{ "));
+    
+    try!(outputString_Level(&lvl, tokenWriter));
+    
+    try!(outputString_optSourceRange(&opt_sr, tokenWriter));
+    
+    try!(tokenWriter.writeStringToken(msg));
+    
+    try!(tokenWriter.writeRaw("}\n"));
+    
+    Ok(())
 }
 
 
 pub fn outputString_Level(lvl : &Severity, writer : &mut TokenWriter) -> Void {
-	
-	try!(writer.writeRawToken(lvl.to_string()));
-	
-	Ok(())
+    
+    try!(writer.writeRawToken(lvl.to_string()));
+    
+    Ok(())
 }
 
 pub fn outputString_SourceRange(sr : &SourceRange, tw : &mut TokenWriter) -> Void {
-	try!(tw.writeRaw("{ "));
-	{
-		let mut out = tw.getCharOut(); 
-		try!(out.write_fmt(format_args!("{}:{} {}:{} ", 
-			sr.start_pos.line-1, sr.start_pos.col.0,
-			sr.end_pos.line-1, sr.end_pos.col.0,
-		)));
-	}
-	try!(tw.writeRaw("}"));
-	
-	Ok(())
+    try!(tw.writeRaw("{ "));
+    {
+        let mut out = tw.getCharOut(); 
+        try!(out.write_fmt(format_args!("{}:{} {}:{} ", 
+            sr.start_pos.line-1, sr.start_pos.col.0,
+            sr.end_pos.line-1, sr.end_pos.col.0,
+        )));
+    }
+    try!(tw.writeRaw("}"));
+    
+    Ok(())
 }
 
 pub fn outputString_optSourceRange(sr : &Option<SourceRange>, writer : &mut TokenWriter) -> Void {
-	
-	match sr {
-		&None => try!(writer.writeRaw("{ }")) ,
-		&Some(ref sr) => try!(outputString_SourceRange(sr, writer)) ,
-	}
-	
-	try!(writer.writeRaw(" "));
-	
-	Ok(())
+    
+    match sr {
+        &None => try!(writer.writeRaw("{ }")) ,
+        &Some(ref sr) => try!(outputString_SourceRange(sr, writer)) ,
+    }
+    
+    try!(writer.writeRaw(" "));
+    
+    Ok(())
 }
 
 
 pub fn write_indent(tokenWriter : &mut TokenWriter, level : u32) -> Void {
-	try!(writeNTimes(&mut *tokenWriter.getCharOut(), ' ', level * 2));
-	Ok(())
+    try!(writeNTimes(&mut *tokenWriter.getCharOut(), ' ', level * 2));
+    Ok(())
 }
 
 pub fn write_structure_element(tw : &mut TokenWriter, element: &StructureElement, level: u32) -> Void
 {
-	try!(tw.writeRawToken(element.kind.to_String()));
-	
-	try!(tw.writeRaw("{ "));
-	
-	try!(tw.writeStringToken(&element.name));
-	
-	try!(outputString_SourceRange(&element.sourcerange, tw));
-	
-	try!(tw.getCharOut().write_str(" {}")); // name source range, Not Supported
-	
-	try!(tw.getCharOut().write_str(" "));
-	try!(tw.writeStringToken(&element.type_desc)); 
-	
-	try!(tw.getCharOut().write_str("{}")); // attribs, Not Supported
-	
-	if element.children.is_empty() {
-		try!(tw.getCharOut().write_str(" "));
-	} else {
-		let level = level + 1;
-		
-		for child in &element.children {
-			try!(tw.getCharOut().write_str("\n"));
-			try!(write_indent(tw, level));
-			try!(write_structure_element(tw, child, level));
-		}
-		
-		try!(tw.getCharOut().write_str("\n"));
-		try!(write_indent(tw, level-1));
-	}
-	
-	try!(tw.getCharOut().write_str("}"));
-	
-	Ok(())
+    try!(tw.writeRawToken(element.kind.to_String()));
+    
+    try!(tw.writeRaw("{ "));
+    
+    try!(tw.writeStringToken(&element.name));
+    
+    try!(outputString_SourceRange(&element.sourcerange, tw));
+    
+    try!(tw.getCharOut().write_str(" {}")); // name source range, Not Supported
+    
+    try!(tw.getCharOut().write_str(" "));
+    try!(tw.writeStringToken(&element.type_desc)); 
+    
+    try!(tw.getCharOut().write_str("{}")); // attribs, Not Supported
+    
+    if element.children.is_empty() {
+        try!(tw.getCharOut().write_str(" "));
+    } else {
+        let level = level + 1;
+        
+        for child in &element.children {
+            try!(tw.getCharOut().write_str("\n"));
+            try!(write_indent(tw, level));
+            try!(write_structure_element(tw, child, level));
+        }
+        
+        try!(tw.getCharOut().write_str("\n"));
+        try!(write_indent(tw, level-1));
+    }
+    
+    try!(tw.getCharOut().write_str("}"));
+    
+    Ok(())
 }
 
 
@@ -367,81 +367,81 @@ mod parse_describe_tests {
     use token_writer::TokenWriter;
     use util::core::*;
     
-	use std::rc::Rc;
-	use std::cell::RefCell;
+    use std::rc::Rc;
+    use std::cell::RefCell;
     
     #[test]
     fn tests_write_structure_element() {
-    	
-    	fn test_writeStructureElement(name : &str, kind : StructureElementKind, sr: SourceRange, type_desc : String,
-    		expected : &str,
-    	) {
-    		let stringRc = Rc::new(RefCell::new(String::new()));
-    		{
-    			let name = String::from(name);
-    			let element = StructureElement { name: name, kind: kind, sourcerange: sr, type_desc: type_desc,
-    				 children: vec![]}; 
-    			let mut tw = TokenWriter { out : stringRc.clone() };
-    			
-    			write_structure_element(&mut tw, &element, 0).ok();
-    		}
-    		
-    		assert_eq!(unwrap_Rc_RefCell(stringRc).trim(), expected);
-    	}
-    	
-    	test_writeStructureElement("blah", StructureElementKind::Var, sourceRange(1, 0, 2, 5), "desc".to_string(),
-    		r#"Var { "blah" { 0:0 1:5 } {} "desc" {} }"#);
+        
+        fn test_writeStructureElement(name : &str, kind : StructureElementKind, sr: SourceRange, type_desc : String,
+            expected : &str,
+        ) {
+            let stringRc = Rc::new(RefCell::new(String::new()));
+            {
+                let name = String::from(name);
+                let element = StructureElement { name: name, kind: kind, sourcerange: sr, type_desc: type_desc,
+                     children: vec![]}; 
+                let mut tw = TokenWriter { out : stringRc.clone() };
+                
+                write_structure_element(&mut tw, &element, 0).ok();
+            }
+            
+            assert_eq!(unwrap_Rc_RefCell(stringRc).trim(), expected);
+        }
+        
+        test_writeStructureElement("blah", StructureElementKind::Var, sourceRange(1, 0, 2, 5), "desc".to_string(),
+            r#"Var { "blah" { 0:0 1:5 } {} "desc" {} }"#);
     }
     
     
     #[test]
     fn parse_analysis_tests() {
-    	test_parse_analysis("", "");
-    	
-    	test_parse_analysis(" #blah ", r#"{ ERROR { 0:2 0:6 } "expected `[`, found `blah`" }"#);
-    	
-    	test_parse_analysis("fn foo(\n  blah", r#"
+        test_parse_analysis("", "");
+        
+        test_parse_analysis(" #blah ", r#"{ ERROR { 0:2 0:6 } "expected `[`, found `blah`" }"#);
+        
+        test_parse_analysis("fn foo(\n  blah", r#"
     { ERROR { 1:6 1:6 } "this file contains an un-closed delimiter" }
     { INFO { 0:6 0:7 } "did you mean to close this delimiter?" }"#);
-    	
-    	// Test a lexer panic
-    	test_parse_analysis("const a = '", 
-    		r#"{ ERROR { 0:10 0:11 } "character literal may only contain one codepoint: '" }"#);
-    	
-//    	test_parse_analysis("pub extern crate futures;", 
-//    		r#""#);
+        
+        // Test a lexer panic
+        test_parse_analysis("const a = '", 
+            r#"{ ERROR { 0:10 0:11 } "character literal may only contain one codepoint: '" }"#);
+        
+//        test_parse_analysis("pub extern crate futures;", 
+//            r#""#);
     }
     
     fn test_parse_analysis(source : &str, expected_msgs : &str) {
-    	let result = parse_analysis(source, String::new()).ok().unwrap();
-    	let mut result : &str = &result;
-    	
-    	result = assert_surrounding_string("RUST_PARSE_DESCRIBE 1.0 {", result, "}");
-    	
-    	result = assert_starts_with("MESSAGES {", result.trim());
-    	result = assert_starts_with(expected_msgs.trim(), result.trim());
-    	result = assert_starts_with("}", result.trim());
-    	
-    	assert_eq!(result, "");
+        let result = parse_analysis(source, String::new()).ok().unwrap();
+        let mut result : &str = &result;
+        
+        result = assert_surrounding_string("RUST_PARSE_DESCRIBE 1.0 {", result, "}");
+        
+        result = assert_starts_with("MESSAGES {", result.trim());
+        result = assert_starts_with(expected_msgs.trim(), result.trim());
+        result = assert_starts_with("}", result.trim());
+        
+        assert_eq!(result, "");
     }
     
     fn assert_surrounding_string<'a> (start : &str, string : &'a str, end : &str) -> &'a str {
-    	let mut string : &str = string;
-    	
-    	string = assert_starts_with(start, string);
-    	string = assert_ends_with(string, end);
-    	
-    	return string;
+        let mut string : &str = string;
+        
+        string = assert_starts_with(start, string);
+        string = assert_ends_with(string, end);
+        
+        return string;
     }
     
     fn assert_starts_with<'a> (start : &str, string : &'a str) -> &'a str {
-    	assert!(string.starts_with(start), "`{}` does not start with `{}`", string, start);
-    	return &string[start.len() .. ];
+        assert!(string.starts_with(start), "`{}` does not start with `{}`", string, start);
+        return &string[start.len() .. ];
     }
     
     fn assert_ends_with<'a> (string : &'a str, end : &str) -> &'a str {
-    	assert!(string.ends_with(end), "`{}` does not end with `{}`", string, end);
-    	return &string[0 .. string.len() - end.len()];
+        assert!(string.ends_with(end), "`{}` does not end with `{}`", string, end);
+        return &string[0 .. string.len() - end.len()];
     }
     
 }
