@@ -8,8 +8,13 @@ It currenly performs a single operation, a "parse-analysis" of a Rust source fil
 ##### Installation
 Run `cargo install --git https://github.com/RustDT/Rainicorn --tag version_1.x`
 
+##### Changelog:
+ * 1.3 - Support for unions, `?` syntax shortcut for `try`, `pub extern crate` (was warning a before).
+
 ##### Future TODO:
-An operation that helps IDEs perform "Locate Symbol", ie, find symbol/definition location using a name pattern. **Note**, this is not the same as "Open Definition" - (ie, find a symbol/definition location by means of resolving a reference).
+Note that parse-describe functionality should eventually be subsumed by [Language Server Protocol](https://github.com/Microsoft/language-server-protocol) functionality, namely:
+ * "PublishDiagnostics Notification" to provide parse errors.
+ * "Document Symbols Request" to provide document structural elements (the tree can be recreated from the flat symbols using the range information, see https://github.com/Microsoft/language-server-protocol/issues/112)
 
 ### parse_describe API (1.0)
 
