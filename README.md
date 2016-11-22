@@ -10,6 +10,7 @@ Run `cargo install --git https://github.com/RustDT/Rainicorn --tag version_1.x`
 
 ##### Changelog:
  * 1.3 - Support for unions, `?` syntax shortcut for `try`, `pub extern crate` (was warning a before).
+   * Unfortunately, impl names are no longer displayed, see: https://github.com/serde-rs/syntex/issues/106.
 
 ##### Future TODO:
 Note that parse-describe functionality should eventually be subsumed by [Language Server Protocol](https://github.com/Microsoft/language-server-protocol) functionality, namely:
