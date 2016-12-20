@@ -96,6 +96,7 @@ pub enum StructureElementKind {
     ExternCrate,
     Mod,
     Use,
+    MacroDef, // FIXME: not actually created at the moment
     TypeAlias,
 }
 
@@ -114,6 +115,7 @@ impl StructureElementKind {
             StructureElementKind::ExternCrate => "ExternCrate",
             StructureElementKind::Mod => "Mod",
             StructureElementKind::Use => "Use",
+            StructureElementKind::MacroDef => "Macro",
             StructureElementKind::TypeAlias => "TypeAlias",
         }
     }

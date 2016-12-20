@@ -635,7 +635,10 @@ r#"Impl { "MyTrait" { 0:0 0:75 } {} "" {}
     // test: visit_mac! visit method 
     test_describe_structure("fn foo() { my_macro!(asf); }", r#"Function { "foo" { 0:0 0:28 } {} "()" {} }"#);
     
-    test_describe_structure("macro_rules! foo { (x => $e:expr) => (); }", "");
+    test_describe_structure("macro_rules! foo { (x => $e:expr) => (); }", r#""#);
+    // TODO: macro definitions, unfortunately can't get that info easily from syntax_syntex
+//    test_describe_structure("macro_rules! five_times { ($x:expr) => (5 * $x); }", 
+//        r#"Macro { "foo" { 0:0 0:28 } {} "" {} }"#);
     
     // Test pub extern
     test_describe_structure("pub extern crate my_crate;", 
