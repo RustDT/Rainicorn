@@ -40,7 +40,7 @@ use std::env;
 
 /* -----------------  ----------------- */
 
-pub fn parse_analysis_forStdout(source : &str) {
+pub fn parse_analysis_for_Stdout(source : &str) {
     parse_analysis(source, StdoutWrite(io::stdout())).ok();
     println!("");
     io::stdout().flush().ok();
@@ -195,7 +195,7 @@ impl MessagesHandler {
         MessagesHandler { codemap : codemap, messages : messages }
     }
     
-    fn writeMessage_handled(&mut self, sourcerange : Option<SourceRange>, msg: &str, severity: Severity) {
+    fn write_message_handled(&mut self, sourcerange : Option<SourceRange>, msg: &str, severity: Severity) {
         
         let msg = SourceMessage{ severity : severity , sourcerange : sourcerange,  message : String::from(msg) };
         
@@ -224,7 +224,7 @@ impl emitter::Emitter for MessagesHandler {
             .collect();
         
         for sourcerange in sourceranges {
-            self.writeMessage_handled(Some(sourcerange), msg, level_to_status_level(lvl));
+            self.write_message_handled(Some(sourcerange), msg, level_to_status_level(lvl));
         }
     }
 }
@@ -251,9 +251,9 @@ pub fn write_parse_analysis_do(messages: Vec<SourceMessage>, elements: Vec<Struc
     
     let mut tokenWriter = TokenWriter { out : out };
     
-    try!(tokenWriter.writeRaw("RUST_PARSE_DESCRIBE 1.0 {\n"));
+    try!(tokenWriter.write_raw("RUST_PARSE_DESCRIBE 1.0 {\n"));
     try!(write_parse_analysis_contents(messages, elements, &mut tokenWriter));
-    try!(tokenWriter.writeRaw("\n}"));
+    try!(tokenWriter.write_raw("\n}"));
     
     Ok(())
 }
@@ -261,11 +261,11 @@ pub fn write_parse_analysis_do(messages: Vec<SourceMessage>, elements: Vec<Struc
 pub fn write_parse_analysis_contents(messages: Vec<SourceMessage>, elements: Vec<StructureElement>, 
     tokenWriter : &mut TokenWriter) -> Void {
     
-    try!(tokenWriter.writeRaw("MESSAGES {\n"));
+    try!(tokenWriter.write_raw("MESSAGES {\n"));
     for msg in messages {
         try!(output_message(tokenWriter, msg.sourcerange, &msg.message, &msg.severity));
     }
-    try!(tokenWriter.writeRaw("}\n"));
+    try!(tokenWriter.write_raw("}\n"));
     
     
     for element in elements {
@@ -279,92 +279,92 @@ fn output_message(tokenWriter: &mut TokenWriter, opt_sr : Option<SourceRange>, m
     -> Void
 {
     
-    try!(tokenWriter.writeRaw("{ "));
+    try!(tokenWriter.write_raw("{ "));
     
-    try!(outputString_Level(&lvl, tokenWriter));
+    try!(output_Level(&lvl, tokenWriter));
     
-    try!(outputString_optSourceRange(&opt_sr, tokenWriter));
+    try!(output_opt_SourceRange(&opt_sr, tokenWriter));
     
-    try!(tokenWriter.writeStringToken(msg));
+    try!(tokenWriter.write_string_token(msg));
     
-    try!(tokenWriter.writeRaw("}\n"));
-    
-    Ok(())
-}
-
-
-pub fn outputString_Level(lvl : &Severity, writer : &mut TokenWriter) -> Void {
-    
-    try!(writer.writeRawToken(lvl.to_string()));
+    try!(tokenWriter.write_raw("}\n"));
     
     Ok(())
 }
 
-pub fn outputString_SourceRange(sr : &SourceRange, tw : &mut TokenWriter) -> Void {
-    try!(tw.writeRaw("{ "));
+
+pub fn output_Level(lvl : &Severity, writer : &mut TokenWriter) -> Void {
+    
+    try!(writer.write_raw_token(lvl.to_string()));
+    
+    Ok(())
+}
+
+pub fn output_SourceRange(sr : &SourceRange, tw : &mut TokenWriter) -> Void {
+    try!(tw.write_raw("{ "));
     {
-        let mut out = tw.getCharOut(); 
+        let mut out = tw.get_output(); 
         try!(out.write_fmt(format_args!("{}:{} {}:{} ", 
             sr.start_pos.line-1, sr.start_pos.col.0,
             sr.end_pos.line-1, sr.end_pos.col.0,
         )));
     }
-    try!(tw.writeRaw("}"));
+    try!(tw.write_raw("}"));
     
     Ok(())
 }
 
-pub fn outputString_optSourceRange(sr : &Option<SourceRange>, writer : &mut TokenWriter) -> Void {
+pub fn output_opt_SourceRange(sr : &Option<SourceRange>, writer : &mut TokenWriter) -> Void {
     
     match sr {
-        &None => try!(writer.writeRaw("{ }")) ,
-        &Some(ref sr) => try!(outputString_SourceRange(sr, writer)) ,
+        &None => try!(writer.write_raw("{ }")) ,
+        &Some(ref sr) => try!(output_SourceRange(sr, writer)) ,
     }
     
-    try!(writer.writeRaw(" "));
+    try!(writer.write_raw(" "));
     
     Ok(())
 }
 
 
 pub fn write_indent(tokenWriter : &mut TokenWriter, level : u32) -> Void {
-    try!(writeNTimes(&mut *tokenWriter.getCharOut(), ' ', level * 2));
+    try!(writeNTimes(&mut *tokenWriter.get_output(), ' ', level * 2));
     Ok(())
 }
 
 pub fn write_structure_element(tw : &mut TokenWriter, element: &StructureElement, level: u32) -> Void
 {
-    try!(tw.writeRawToken(element.kind.to_String()));
+    try!(tw.write_raw_token(element.kind.to_string()));
     
-    try!(tw.writeRaw("{ "));
+    try!(tw.write_raw("{ "));
     
-    try!(tw.writeStringToken(&element.name));
+    try!(tw.write_string_token(&element.name));
     
-    try!(outputString_SourceRange(&element.sourcerange, tw));
+    try!(output_SourceRange(&element.sourcerange, tw));
     
-    try!(tw.getCharOut().write_str(" {}")); // name source range, Not Supported
+    try!(tw.get_output().write_str(" {}")); // name source range, Not Supported
     
-    try!(tw.getCharOut().write_str(" "));
-    try!(tw.writeStringToken(&element.type_desc)); 
+    try!(tw.get_output().write_str(" "));
+    try!(tw.write_string_token(&element.type_desc)); 
     
-    try!(tw.getCharOut().write_str("{}")); // attribs, Not Supported
+    try!(tw.get_output().write_str("{}")); // attribs, Not Supported
     
     if element.children.is_empty() {
-        try!(tw.getCharOut().write_str(" "));
+        try!(tw.get_output().write_str(" "));
     } else {
         let level = level + 1;
         
         for child in &element.children {
-            try!(tw.getCharOut().write_str("\n"));
+            try!(tw.get_output().write_str("\n"));
             try!(write_indent(tw, level));
             try!(write_structure_element(tw, child, level));
         }
         
-        try!(tw.getCharOut().write_str("\n"));
+        try!(tw.get_output().write_str("\n"));
         try!(write_indent(tw, level-1));
     }
     
-    try!(tw.getCharOut().write_str("}"));
+    try!(tw.get_output().write_str("}"));
     
     Ok(())
 }
@@ -382,10 +382,7 @@ mod parse_describe_tests {
     use std::rc::Rc;
     use std::cell::RefCell;
     
-    #[test]
-    fn tests_write_structure_element() {
-        
-        fn test_writeStructureElement(name : &str, kind : StructureElementKind, sr: SourceRange, type_desc : String,
+        fn test_write_structure_element(name : &str, kind : StructureElementKind, sr: SourceRange, type_desc : String,
             expected : &str,
         ) {
             let stringRc = Rc::new(RefCell::new(String::new()));
@@ -400,14 +397,16 @@ mod parse_describe_tests {
             
             assert_eq!(unwrap_Rc_RefCell(stringRc).trim(), expected);
         }
-        
-        test_writeStructureElement("blah", StructureElementKind::Var, sourceRange(1, 0, 2, 5), "desc".to_string(),
+
+    #[test]
+    fn write_structure_element__tests() {
+        test_write_structure_element("blah", StructureElementKind::Var, source_range(1, 0, 2, 5), "desc".to_string(),
             r#"Var { "blah" { 0:0 1:5 } {} "desc" {} }"#);
     }
     
     
     #[test]
-    fn parse_analysis_tests() {
+    fn parse_analysis__tests() {
         test_parse_analysis("", "");
         
         test_parse_analysis(" #blah ", r#"{ ERROR { 0:2 0:6 } "expected `[`, found `blah`" }"#);

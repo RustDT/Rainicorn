@@ -11,7 +11,7 @@ fn main() {
     
     match result {
         Err(err) => println!("Error: {}.", err),
-        Ok(_) => parse_describe::parse_analysis_forStdout(&buffer),
+        Ok(_) => parse_describe::parse_analysis_for_Stdout(&buffer),
     }
     
 }

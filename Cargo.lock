@@ -1,6 +1,6 @@
 [root]
 name = "rainicorn"
-version = "1.3.0"
+version = "2.0.0"
 dependencies = [
  "rustdt_util 0.2.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "syntex_errors 0.48.0 (registry+https://github.com/rust-lang/crates.io-index)",

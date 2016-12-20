@@ -35,10 +35,10 @@ impl SourceRange {
         let startLoc = codemap.lookup_char_pos(span.lo);
         let endLoc = codemap.lookup_char_pos(span.hi);
         
-        SourceRange::fromLoc(startLoc, endLoc)
+        SourceRange::from_loc(startLoc, endLoc)
     }
     
-    pub fn fromLoc(startLoc : Loc, endLoc : Loc) -> SourceRange {
+    pub fn from_loc(startLoc : Loc, endLoc : Loc) -> SourceRange {
         SourceRange{ 
             start_pos : LineColumnPosition{ line: startLoc.line, col : startLoc.col }, 
             end_pos : LineColumnPosition{ line: endLoc.line, col : endLoc.col },
@@ -47,7 +47,7 @@ impl SourceRange {
     
 }
 
-pub fn sourceRange(start_line : usize, start_col : usize, end_line : usize, end_col : usize) -> SourceRange {
+pub fn source_range(start_line : usize, start_col : usize, end_line : usize, end_col : usize) -> SourceRange {
     SourceRange { 
         start_pos : LineColumnPosition { line : start_line, col : CharPos(start_col) },
         end_pos : LineColumnPosition { line : end_line, col : CharPos(end_col) },
@@ -101,7 +101,7 @@ pub enum StructureElementKind {
 
 
 impl StructureElementKind {
-    pub fn to_String(&self) -> &'static str {
+    pub fn to_string(&self) -> &'static str {
         match *self {
             StructureElementKind::Var => "Var",
             StructureElementKind::Function => "Function",

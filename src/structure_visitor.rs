@@ -17,6 +17,8 @@
 //! Write a parse structure into a TokenWriter
 //! 
 
+use std;
+
 use util::core::*;
 use source_model::*;
 
@@ -39,58 +41,79 @@ impl<'ps> StructureVisitor<'ps> {
         }
     }
     
-    pub fn writeElement_do<FN>(&mut self, ident: &str, kind: StructureElementKind, sourcerange: SourceRange,
+    pub fn write_element_do<FN>(
+        &mut self, 
+        ident: &str, 
+        kind: StructureElementKind, 
+        sourcerange: SourceRange,
         type_desc: String,  
-        walkFn: FN) 
-        -> Void
+        walkFn: FN
+    ) -> Void
         where FN : Fn(&mut Self) 
     {
 
         let mut siblings = vec![];
-        ::std::mem::swap(&mut self.elements, &mut siblings);
+        std::mem::swap(&mut self.elements, &mut siblings);
         
         walkFn(self); // self.elements now has children
         
-        ::std::mem::swap(&mut self.elements, &mut siblings);
+        std::mem::swap(&mut self.elements, &mut siblings);
         let children = siblings;
         
-        let element = StructureElement{ name: String::from(ident), kind: kind, sourcerange: sourcerange ,
+        let element = StructureElement{ 
+            name: String::from(ident), 
+            kind: kind, 
+            sourcerange: sourcerange ,
             type_desc : type_desc,
-            children : children };
+            children : children 
+        };
         
         self.elements.push(element);
         Ok(())
     }
     
-    pub fn writeElement_handled<FN>(&mut self, ident: &str, kind : StructureElementKind, sourceRange: SourceRange, 
+    pub fn write_element_handled<FN>(
+        &mut self, 
+        ident: &str, 
+        kind : StructureElementKind, 
+        sourceRange: SourceRange, 
         type_desc: String,
         walkFn : FN)
-        where FN : Fn(&mut Self)
+        where FN : Fn(&mut Self) 
     {
         use std::io::Write;
         
         match 
-            self.writeElement_do(ident, kind, sourceRange, type_desc, walkFn)
+            self.write_element_do(ident, kind, sourceRange, type_desc, walkFn)
         {
             Ok(ok) => { ok } 
             Err(error) => { 
-                ::std::io::stderr().write_fmt(format_args!("Error writing element: {}", error)).ok(); 
+                std::io::stderr().write_fmt(format_args!("Error writing element: {}", error)).ok(); 
             }
         }
     }
     
-    pub fn writeElement_TODO<FN>(&mut self, ident: Ident, kind : StructureElementKind, span: Span, 
-        walkFn : FN)
-        where FN : Fn(&mut Self)
+    pub fn write_element_TODO<FN>(
+        &mut self, 
+        ident: Ident, 
+        kind : StructureElementKind, span: Span, 
+        walkFn : FN
+    )
+        where FN : Fn(&mut Self) 
     {
-        self.writeElement(ident, kind, span, "".to_string(), walkFn);
+        self.write_element(ident, kind, span, "".to_string(), walkFn);
     }
     
-    pub fn writeElement<FN>(&mut self, ident: Ident, kind : StructureElementKind, span: Span, 
-        type_desc: String, walkFn : FN)
+    pub fn write_element<FN>(
+        &mut self, 
+        ident: Ident, 
+        kind : StructureElementKind, 
+        span: Span, 
+        type_desc: String, walkFn : FN
+    )
         where FN : Fn(&mut Self)
     {
-        self.writeElement_handled(&*ident.name.as_str(), kind, SourceRange::new(self.codemap, span), 
+        self.write_element_handled(&*ident.name.as_str(), kind, SourceRange::new(self.codemap, span), 
             type_desc, walkFn)
     }
     
@@ -144,7 +167,7 @@ impl<'ps> StructureVisitor<'ps> {
             }
         }
 
-        self.writeElement_handled(&useSpec, kind, SourceRange::new(self.codemap, span), "".to_string(), 
+        self.write_element_handled(&useSpec, kind, SourceRange::new(self.codemap, span), "".to_string(), 
             &|_ : &mut Self| { })
     }
     
@@ -194,7 +217,7 @@ impl<'ps> StructureVisitor<'ps> {
     fn write_function_element(&mut self, ident: Ident, span: Span, fd: & FnDecl, walkFn : &Fn(&mut Self)) {
         let type_desc = self.get_type_desc_from_fndecl(&fd);
         
-        self.writeElement(ident, StructureElementKind::Function, span, type_desc, walkFn);
+        self.write_element(ident, StructureElementKind::Function, span, type_desc, walkFn);
     }
     
 }
@@ -211,7 +234,7 @@ impl<'v> Visitor for StructureVisitor<'v> {
     fn visit_mod(&mut self, m: &Mod, _span: Span, _nodeid: NodeId) {
         
 //        let sr = &SourceRange::new(self.codemap, span);
-//        self.writeElement_handled("_file_", StructureElementKind::File, sr, |_self : &mut Self| { 
+//        self.write_element_handled("_file_", StructureElementKind::File, sr, |_self : &mut Self| { 
 //            walk_mod(_self, m);
 //        })
         walk_mod(self, m);
@@ -242,7 +265,7 @@ impl<'v> Visitor for StructureVisitor<'v> {
                 if let Ok(snippet) = self.codemap.span_to_snippet(typ.span) {
                     type_desc.push_str(&snippet);
                 }
-                self.writeElement(item.ident, StructureElementKind::Var, item.span, type_desc, noop_walkFn);
+                self.write_element(item.ident, StructureElementKind::Var, item.span, type_desc, noop_walkFn);
                 return;
             }
             ItemKind::Fn(ref declaration, unsafety, constness, abi, ref generics, ref body) => {
@@ -291,7 +314,7 @@ impl<'v> Visitor for StructureVisitor<'v> {
             }
         }
         
-        self.writeElement(item.ident, kind, item.span, type_desc, walkFn);
+        self.write_element(item.ident, kind, item.span, type_desc, walkFn);
     }
     
     fn visit_enum_def(&mut self, enum_def: &EnumDef, generics: &Generics, nodeid: NodeId, _span: Span) {
@@ -315,14 +338,14 @@ impl<'v> Visitor for StructureVisitor<'v> {
             self.parentIsUnion = false;
         }
         
-        self.writeElement_TODO(ident, kind, span, |_self : &mut Self| { 
+        self.write_element_TODO(ident, kind, span, |_self : &mut Self| { 
             walk_struct_def(_self, s);
         });
     }
     
     fn visit_struct_field(&mut self, sf: &StructField) {
         if let Some(ident) = sf.ident {
-            self.writeElement_TODO(ident, StructureElementKind::Var, sf.span, |_self : &mut Self| { 
+            self.write_element_TODO(ident, StructureElementKind::Var, sf.span, |_self : &mut Self| { 
                 walk_struct_field(_self, sf); 
             });
         }
@@ -350,7 +373,7 @@ impl<'v> Visitor for StructureVisitor<'v> {
             }
         }
         
-        self.writeElement_TODO(ti.ident, kind, ti.span, |_self : &mut Self| { 
+        self.write_element_TODO(ti.ident, kind, ti.span, |_self : &mut Self| { 
             walk_trait_item(_self, ti); 
         });
     }
@@ -372,7 +395,7 @@ impl<'v> Visitor for StructureVisitor<'v> {
             }
         }
         
-        self.writeElement_TODO(ii.ident, kind, ii.span, |_self : &mut Self| { 
+        self.write_element_TODO(ii.ident, kind, ii.span, |_self : &mut Self| { 
             walk_impl_item(_self, ii);
         });
     }
@@ -410,7 +433,7 @@ impl<'v> Visitor for StructureVisitor<'v> {
             }
         }
         
-        self.writeElement_TODO(foreign_item.ident, kind, foreign_item.span, |_self : &mut Self| { 
+        self.write_element_TODO(foreign_item.ident, kind, foreign_item.span, |_self : &mut Self| { 
             walk_foreign_item(_self, foreign_item); 
         });
     }

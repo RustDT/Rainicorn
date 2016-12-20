@@ -35,21 +35,21 @@ impl fmt::Debug for TokenWriter {
 
 impl TokenWriter {
     
-    pub fn getCharOut(&self) -> RefMut<fmt::Write + 'static> {
+    pub fn get_output(&self) -> RefMut<fmt::Write + 'static> {
         self.out.borrow_mut()
     }
     
-    pub fn writeRaw(&mut self, string : &str) -> result::Result<(), fmt::Error> {
-        self.getCharOut().write_str(string)
+    pub fn write_raw(&mut self, string : &str) -> result::Result<(), fmt::Error> {
+        self.get_output().write_str(string)
     }
     
-    pub fn writeStringToken(&mut self, string : &str) -> result::Result<(), fmt::Error> {
-        try!(write_escaped_string(string, &mut* self.getCharOut()));
+    pub fn write_string_token(&mut self, string : &str) -> result::Result<(), fmt::Error> {
+        try!(write_escaped_string(string, &mut* self.get_output()));
         
-        self.getCharOut().write_char(' ')
+        self.get_output().write_char(' ')
     }
     
-    pub fn writeRawToken(&mut self, string : &str) -> Void {
+    pub fn write_raw_token(&mut self, string : &str) -> Void {
         
         for ch in string.chars() {
             if ch.is_whitespace() 
@@ -61,8 +61,8 @@ impl TokenWriter {
             }
         }
         
-        try!(self.getCharOut().write_str(string));
-        try!(self.getCharOut().write_char(' '));
+        try!(self.get_output().write_str(string));
+        try!(self.get_output().write_char(' '));
         
         Ok(())
     }
@@ -70,28 +70,28 @@ impl TokenWriter {
 }
 
 #[test]
-fn test__writeRawToken() {
+fn test__write_raw_token() {
     
-    fn writeRawToken_toString(string : &str) -> GResult<String> {
+    fn write_raw_token_toString(string : &str) -> GResult<String> {
         let outRc : Rc<RefCell<String>> = Rc::new(RefCell::new(String::new()));
         
-        let result = TokenWriter { out: outRc.clone() }.writeRawToken(string);
+        let result = TokenWriter { out: outRc.clone() }.write_raw_token(string);
         match result {
             Ok(_) => Ok(unwrap_Rc_RefCell(outRc)),
             Err(error) => Err(error),
         }
     }
     
-    assert_eq!(writeRawToken_toString("blah").ok().unwrap(), r#"blah "#);
-    writeRawToken_toString("bl ah").unwrap_err();
-    writeRawToken_toString("bl{ah").unwrap_err();
+    assert_eq!(write_raw_token_toString("blah").ok().unwrap(), r#"blah "#);
+    write_raw_token_toString("bl ah").unwrap_err();
+    write_raw_token_toString("bl{ah").unwrap_err();
 }
 
 /* ----------------- some parser/serialize utils ----------------- */
 
 pub fn write_escaped_string<OUT : ?Sized + fmt::Write>(string : &str, out : &mut OUT) 
     -> fmt::Result 
-//pub fn writeStringToken<ERR, OUT : ?Sized + CharOutput<ERR>>(string : &str, out : &mut OUT) 
+//pub fn write_string_token<ERR, OUT : ?Sized + CharOutput<ERR>>(string : &str, out : &mut OUT) 
 //    -> result::Result<(), ERR> 
 {
     
@@ -115,17 +115,17 @@ pub fn write_escaped_string<OUT : ?Sized + fmt::Write>(string : &str, out : &mut
 #[test]
 fn test__write_escaped_string() {
     
-    fn writeStringToken_toString(string : &str) -> String {
+    fn write_string_token_toString(string : &str) -> String {
         let mut result = String::new();
         write_escaped_string(string, &mut result).unwrap();
         result
     }
     
-    assert_eq!(writeStringToken_toString(""), r#""""#);
-    assert_eq!(writeStringToken_toString("abc"), r#""abc""#);
-    assert_eq!(writeStringToken_toString(r#"-"-"#), r#""-\"-""#);
-    assert_eq!(writeStringToken_toString(r#"""#), r#""\"""#);
-    assert_eq!(writeStringToken_toString(r#"\"#), r#""\\""#);
-    assert_eq!(writeStringToken_toString(r#"--\"-"#), r#""--\\\"-""#);
-    assert_eq!(writeStringToken_toString(r#"---\"#), r#""---\\""#);
+    assert_eq!(write_string_token_toString(""), r#""""#);
+    assert_eq!(write_string_token_toString("abc"), r#""abc""#);
+    assert_eq!(write_string_token_toString(r#"-"-"#), r#""-\"-""#);
+    assert_eq!(write_string_token_toString(r#"""#), r#""\"""#);
+    assert_eq!(write_string_token_toString(r#"\"#), r#""\\""#);
+    assert_eq!(write_string_token_toString(r#"--\"-"#), r#""--\\\"-""#);
+    assert_eq!(write_string_token_toString(r#"---\"#), r#""---\\""#);
 }
