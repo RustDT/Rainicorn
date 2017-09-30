@@ -50,7 +50,7 @@ pub fn parse_analysis<T: fmt::Write + 'static>(source: &str, out: T) -> GResult<
     let (messages, elements) = parse_crate_with_messages(source);
 
     let outRc = Rc::new(RefCell::new(out));
-    try!(write_parse_analysis_do(messages, elements, outRc.clone()));
+    write_parse_analysis_do(messages, elements, outRc.clone())?;
     let res = unwrap_Rc_RefCell(outRc);
     return Ok(res);
 }
@@ -175,7 +175,7 @@ pub fn parse_crate_do<'a>(source: &str, sess: &'a ParseSess) -> parse::PResult<'
         let srdr = parse::lexer::StringReader::new(&sess.span_diagnostic, filemap);
         let mut p1 = parse::parser::Parser::new(sess, Box::new(srdr));
 
-        try!(p1.parse_all_token_trees())
+        p1.parse_all_token_trees()?
     };
 
     let trdr = parse::lexer::new_tt_reader(&sess.span_diagnostic, None, tts);
@@ -261,9 +261,9 @@ pub fn write_parse_analysis_do(messages: Vec<SourceMessage>,
 
     let mut tokenWriter = TokenWriter { out: out };
 
-    try!(tokenWriter.write_raw("RUST_PARSE_DESCRIBE 1.0 {\n"));
-    try!(write_parse_analysis_contents(messages, elements, &mut tokenWriter));
-    try!(tokenWriter.write_raw("\n}"));
+    tokenWriter.write_raw("RUST_PARSE_DESCRIBE 1.0 {\n")?;
+    write_parse_analysis_contents(messages, elements, &mut tokenWriter)?;
+    tokenWriter.write_raw("\n}")?;
 
     Ok(())
 }
@@ -273,15 +273,15 @@ pub fn write_parse_analysis_contents(messages: Vec<SourceMessage>,
                                      tokenWriter: &mut TokenWriter)
                                      -> Void {
 
-    try!(tokenWriter.write_raw("MESSAGES {\n"));
+    tokenWriter.write_raw("MESSAGES {\n")?;
     for msg in messages {
-        try!(output_message(tokenWriter, msg.sourcerange, &msg.message, &msg.severity));
+        output_message(tokenWriter, msg.sourcerange, &msg.message, &msg.severity)?;
     }
-    try!(tokenWriter.write_raw("}\n"));
+    tokenWriter.write_raw("}\n")?;
 
 
     for element in elements {
-        try!(write_structure_element(tokenWriter, &element, 0));
+        write_structure_element(tokenWriter, &element, 0)?;
     }
 
     Ok(())
@@ -293,15 +293,15 @@ fn output_message(tokenWriter: &mut TokenWriter,
                   lvl: &Severity)
                   -> Void {
 
-    try!(tokenWriter.write_raw("{ "));
+    tokenWriter.write_raw("{ ")?;
 
-    try!(output_Level(&lvl, tokenWriter));
+    output_Level(&lvl, tokenWriter)?;
 
-    try!(output_opt_SourceRange(&opt_sr, tokenWriter));
+    output_opt_SourceRange(&opt_sr, tokenWriter)?;
 
-    try!(tokenWriter.write_string_token(msg));
+    tokenWriter.write_string_token(msg)?;
 
-    try!(tokenWriter.write_raw("}\n"));
+    tokenWriter.write_raw("}\n")?;
 
     Ok(())
 }
@@ -309,21 +309,21 @@ fn output_message(tokenWriter: &mut TokenWriter,
 
 pub fn output_Level(lvl: &Severity, writer: &mut TokenWriter) -> Void {
 
-    try!(writer.write_raw_token(lvl.to_string()));
+    writer.write_raw_token(lvl.to_string())?;
 
     Ok(())
 }
 
 pub fn output_SourceRange(sr: &SourceRange, tw: &mut TokenWriter) -> Void {
-    try!(tw.write_raw("{ "));
+    tw.write_raw("{ ")?;
     {
         let mut out = tw.get_output();
-        try!(out.write_fmt(format_args!("{}:{} {}:{} ", 
+        out.write_fmt(format_args!("{}:{} {}:{} ", 
             sr.start_pos.line-1, sr.start_pos.col.0,
             sr.end_pos.line-1, sr.end_pos.col.0,
-        )));
+        ))?;
     }
-    try!(tw.write_raw("}"));
+    tw.write_raw("}")?;
 
     Ok(())
 }
@@ -331,18 +331,18 @@ pub fn output_SourceRange(sr: &SourceRange, tw: &mut TokenWriter) -> Void {
 pub fn output_opt_SourceRange(sr: &Option<SourceRange>, writer: &mut TokenWriter) -> Void {
 
     match sr {
-        &None => try!(writer.write_raw("{ }")),
-        &Some(ref sr) => try!(output_SourceRange(sr, writer)),
+        &None => writer.write_raw("{ }")?,
+        &Some(ref sr) => output_SourceRange(sr, writer)?,
     }
 
-    try!(writer.write_raw(" "));
+    writer.write_raw(" ")?;
 
     Ok(())
 }
 
 
 pub fn write_indent(tokenWriter: &mut TokenWriter, level: u32) -> Void {
-    try!(writeNTimes(&mut *tokenWriter.get_output(), ' ', level * 2));
+    writeNTimes(&mut *tokenWriter.get_output(), ' ', level * 2)?;
     Ok(())
 }
 
@@ -350,37 +350,37 @@ pub fn write_structure_element(tw: &mut TokenWriter,
                                element: &StructureElement,
                                level: u32)
                                -> Void {
-    try!(tw.write_raw_token(element.kind.to_string()));
+    tw.write_raw_token(element.kind.to_string())?;
 
-    try!(tw.write_raw("{ "));
+    tw.write_raw("{ ")?;
 
-    try!(tw.write_string_token(&element.name));
+    tw.write_string_token(&element.name)?;
 
-    try!(output_SourceRange(&element.sourcerange, tw));
+    output_SourceRange(&element.sourcerange, tw)?;
 
-    try!(tw.get_output().write_str(" {}")); // name source range, Not Supported
+    tw.get_output().write_str(" {}")?; // name source range, Not Supported
 
-    try!(tw.get_output().write_str(" "));
-    try!(tw.write_string_token(&element.type_desc));
+    tw.get_output().write_str(" ")?;
+    tw.write_string_token(&element.type_desc)?;
 
-    try!(tw.get_output().write_str("{}")); // attribs, Not Supported
+    tw.get_output().write_str("{}")?; // attribs, Not Supported
 
     if element.children.is_empty() {
-        try!(tw.get_output().write_str(" "));
+        tw.get_output().write_str(" ")?;
     } else {
         let level = level + 1;
 
         for child in &element.children {
-            try!(tw.get_output().write_str("\n"));
-            try!(write_indent(tw, level));
-            try!(write_structure_element(tw, child, level));
+            tw.get_output().write_str("\n")?;
+            write_indent(tw, level)?;
+            write_structure_element(tw, child, level)?;
         }
 
-        try!(tw.get_output().write_str("\n"));
-        try!(write_indent(tw, level - 1));
+        tw.get_output().write_str("\n")?;
+        write_indent(tw, level - 1)?;
     }
 
-    try!(tw.get_output().write_str("}"));
+    tw.get_output().write_str("}")?;
 
     Ok(())
 }
