@@ -5,12 +5,3 @@ version = "2.0.0"
 [dependencies]
 syntex_errors = "0.48.0"
 syntex_syntax = "0.48.0"
-rustdt_util ="0.2.3"
-
-[[bin]]
-name = "parse_describe"
-test = false
-
-[lib]
-name = "rainicorn"
-path = "src/lib.rs"

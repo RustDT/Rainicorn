@@ -1,4 +1,7 @@
 # Rainicorn
+
+[![Build Status](https://travis-ci.org/termoshtt/Rainicorn.svg?branch=master)](https://travis-ci.org/termoshtt/Rainicorn)
+
 Rainicorn is a tool intended for use by Rust IDEs. 
 
 It currenly performs a single operation, a "parse-analysis" of a Rust source file (using lib_syntax, the rustc parser), and returns useful information such as:
