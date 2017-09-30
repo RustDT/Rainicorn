@@ -1,5 +1,5 @@
 language: rust
-sudo: required
+sudo: false
 
 rust:
   - stable
@@ -8,6 +8,7 @@ rust:
 
 os:
   - linux
+  - osx
 
 cache: cargo
 
@@ -16,15 +17,6 @@ matrix:
     - rust: nightly
 
 script: cargo test -vv
-
-addons:
-  apt:
-    sources:
-      - kubuntu-backports
-
-    packages:
-      - cmake
-      - gfortran
 
 env:
   - RUST_BACKTRACE=1
