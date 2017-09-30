@@ -1,4 +1,9 @@
 # Rainicorn
+
+[![Crate](http://meritbadge.herokuapp.com/rainicorn)](https://crates.io/crates/rainicorn)
+[![docs.rs](https://docs.rs/rainicorn/badge.svg)](https://docs.rs/rainicorn)
+[![Build Status](https://travis-ci.org/termoshtt/rainicorn.svg?branch=master)](https://travis-ci.org/termoshtt/rainicorn)
+
 Rainicorn is a tool intended for use by Rust IDEs. 
 
 It currenly performs a single operation, a "parse-analysis" of a Rust source file (using lib_syntax, the rustc parser), and returns useful information such as:

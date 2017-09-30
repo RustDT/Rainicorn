@@ -1,14 +1,22 @@
 language: rust
+sudo: false
 
 rust:
   - stable
   - beta
   - nightly
-  
+
+os:
+  - linux
+  - osx
+
+cache: cargo
+
 matrix:
   allow_failures:
     - rust: nightly
-    
-script:
-  - cargo build --verbose
-  - cargo test --verbose
+
+script: cargo test -vv
+
+env:
+  - RUST_BACKTRACE=1
