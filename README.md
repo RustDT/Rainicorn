@@ -1,8 +1,6 @@
 # Rainicorn
 
-[![Crate](http://meritbadge.herokuapp.com/rainicorn)](https://crates.io/crates/rainicorn)
-[![docs.rs](https://docs.rs/rainicorn/badge.svg)](https://docs.rs/rainicorn)
-[![Build Status](https://travis-ci.org/termoshtt/rainicorn.svg?branch=master)](https://travis-ci.org/termoshtt/rainicorn)
+[![Build Status](https://travis-ci.org/termoshtt/Rainicorn.svg?branch=master)](https://travis-ci.org/termoshtt/Rainicorn)
 
 Rainicorn is a tool intended for use by Rust IDEs. 
 
