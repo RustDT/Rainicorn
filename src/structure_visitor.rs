@@ -19,7 +19,6 @@
 
 use std;
 
-use util::core::*;
 use source_model::*;
 
 use syntex_syntax::visit::*;

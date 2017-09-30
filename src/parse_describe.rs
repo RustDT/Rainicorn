@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use util::core::*;
-use util::string::*;
 use source_model::*;
 
 use syntex_syntax::syntax::ast;
@@ -22,7 +20,6 @@ use syntex_syntax::visit;
 use syntex_syntax::codemap::{self, MultiSpan, CodeMap};
 use syntex_errors::{Handler, Level, DiagnosticBuilder};
 use syntex_errors::emitter;
-
 
 use std::boxed::Box;
 use std::path::Path;
@@ -36,9 +33,6 @@ use std::io::Write;
 use std::fmt;
 use std::path::PathBuf;
 use std::env;
-
-
-/* -----------------  ----------------- */
 
 pub fn parse_analysis_for_Stdout(source: &str) {
     parse_analysis(source, StdoutWrite(io::stdout())).ok();
