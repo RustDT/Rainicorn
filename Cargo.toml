@@ -1,14 +1,16 @@
 [package]
 name = "rainicorn"
 version = "2.0.0"
+autobins = false
 
 [dependencies]
-syntex_errors = "^0.48"
-syntex_syntax = "^0.48"
+syntex_errors = "^0.59"
+syntex_syntax = "^0.59"
 rustdt_util ="0.2.3"
 
 [[bin]]
 name = "parse_describe"
+path = "src/main.rs"
 test = false
 
 [lib]

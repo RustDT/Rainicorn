@@ -12,8 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use ::syntex_syntax::codemap:: { Span, Loc, CodeMap, CharPos};
-
+use syntex_syntax::codemap::{CharPos, CodeMap, Loc, Span};
 
 #[derive(Debug, Clone, Copy)]
 pub struct LineColumnPosition {
@@ -21,39 +20,36 @@ pub struct LineColumnPosition {
     pub line: usize,
     /// The (0-based) column offset
     pub col: CharPos,
-    
 }
 
 #[derive(Debug, Clone, Copy)]
 pub struct SourceRange {
-    pub start_pos : LineColumnPosition,
-    pub end_pos : LineColumnPosition,
+    pub start_pos: LineColumnPosition,
+    pub end_pos: LineColumnPosition,
 }
 
 impl SourceRange {
-    pub fn new(codemap : &CodeMap, span : Span) -> SourceRange {
+    pub fn new(codemap: &CodeMap, span: Span) -> SourceRange {
         let startLoc = codemap.lookup_char_pos(span.lo);
         let endLoc = codemap.lookup_char_pos(span.hi);
-        
+
         SourceRange::from_loc(startLoc, endLoc)
     }
-    
-    pub fn from_loc(startLoc : Loc, endLoc : Loc) -> SourceRange {
-        SourceRange{ 
-            start_pos : LineColumnPosition{ line: startLoc.line, col : startLoc.col }, 
-            end_pos : LineColumnPosition{ line: endLoc.line, col : endLoc.col },
+
+    pub fn from_loc(startLoc: Loc, endLoc: Loc) -> SourceRange {
+        SourceRange {
+            start_pos: LineColumnPosition { line: startLoc.line, col: startLoc.col },
+            end_pos: LineColumnPosition { line: endLoc.line, col: endLoc.col },
         }
     }
-    
 }
 
-pub fn source_range(start_line : usize, start_col : usize, end_line : usize, end_col : usize) -> SourceRange {
-    SourceRange { 
-        start_pos : LineColumnPosition { line : start_line, col : CharPos(start_col) },
-        end_pos : LineColumnPosition { line : end_line, col : CharPos(end_col) },
+pub fn source_range(start_line: usize, start_col: usize, end_line: usize, end_col: usize) -> SourceRange {
+    SourceRange {
+        start_pos: LineColumnPosition { line: start_line, col: CharPos(start_col) },
+        end_pos: LineColumnPosition { line: end_line, col: CharPos(end_col) },
     }
 }
-
 
 /* -----------------  ----------------- */
 
@@ -75,11 +71,10 @@ impl Severity {
     }
 }
 
-
 pub struct SourceMessage {
-    pub severity : Severity,
-    pub sourcerange : Option<SourceRange>,
-    pub message : String,
+    pub severity: Severity,
+    pub sourcerange: Option<SourceRange>,
+    pub message: String,
 }
 
 /* ----------------- Model ----------------- */
@@ -99,7 +94,6 @@ pub enum StructureElementKind {
     MacroDef, // FIXME: not actually created at the moment
     TypeAlias,
 }
-
 
 impl StructureElementKind {
     pub fn to_string(&self) -> &'static str {
@@ -125,7 +119,7 @@ pub struct StructureElement {
     pub name: String,
     pub kind: StructureElementKind,
     pub sourcerange: SourceRange,
-    
+
     pub type_desc: String,
     pub children: Vec<StructureElement>,
 }
