@@ -64,7 +64,7 @@ pub fn parse_crate_with_messages(source: &str) -> (Vec<SourceMessage>, Vec<Struc
         let source = String::from(source);
         let messages = messages.clone();
 
-        let worker_thread = thread::Builder::new().name("parser_thread".to_string()).spawn(move || parse_crate_with_messages_do(&source, messages)).unwrap();
+        let worker_thread = thread::Builder::new().name("parser_thread".to_string()).spawn(move || ::syntex_syntax::with_globals(|| parse_crate_with_messages_do(&source, messages))).unwrap();
 
         worker_thread.join().unwrap_or(vec![])
     };
