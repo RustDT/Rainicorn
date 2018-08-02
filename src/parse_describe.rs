@@ -17,12 +17,13 @@ use util::core::*;
 use util::string::*;
 
 use syntex_errors::emitter;
-use syntex_errors::{DiagnosticBuilder, Handler, Level};
+use syntex_errors::{DiagnosticBuilder, Handler, Level, DiagnosticId};
 use syntex_syntax::codemap::{self, CodeMap, FilePathMapping, MultiSpan};
 use syntex_syntax::parse::{self, ParseSess};
 use syntex_syntax::syntax::ast;
 use syntex_syntax::tokenstream::TokenStream;
 use syntex_syntax::visit;
+use syntex_pos::FileName;
 
 use std::boxed::Box;
 use std::path::Path;
@@ -151,10 +152,9 @@ fn parse_crate<'a>(source: &str, codemap: Rc<CodeMap>, messages: Arc<Mutex<Vec<S
 pub fn parse_crate_do<'a>(source: &str, sess: &'a ParseSess) -> parse::PResult<'a, ast::Crate> {
     let source = source.to_string();
     let name = "_file_module_".to_string();
-    let filemap = sess.codemap().new_filemap(name, source);
-
+    
     let tts = {
-        let mut p1 = parse::filemap_to_parser(sess, filemap);
+        let mut p1 = parse::new_parser_from_source_str(sess, FileName::Real(name.into()), source);
         p1.parse_all_token_trees()?.into_iter().map(|tt| tt.into()).collect::<Vec<_>>()
     };
 
@@ -183,7 +183,10 @@ impl emitter::Emitter for MessagesHandler {
     fn emit(&mut self, db: &DiagnosticBuilder) {
         let msg = db.message();
         let msg = msg.as_str();
-        let code: Option<&String> = db.code.as_ref();
+        let code: Option<&String> = db.code.as_ref().map(|c| match c  {
+            DiagnosticId::Error(ref str) => str,
+            DiagnosticId::Lint(ref str) => str,
+        });
         let lvl: Level = db.level;
 
         let multispan: &MultiSpan = &db.span;
@@ -207,7 +210,7 @@ fn level_to_status_level(lvl: Level) -> Severity {
         Level::Bug => panic!("Level::BUG"),
         Level::Cancelled => panic!("Level::CANCELLED"),
         Level::Help | Level::Note => Severity::INFO,
-        Level::Warning => Severity::WARNING,
+        Level::Warning | Level::FailureNote => Severity::WARNING,
         Level::Error | Level::Fatal => Severity::ERROR,
     }
 }

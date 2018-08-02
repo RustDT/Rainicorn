@@ -96,7 +96,7 @@ impl<'ps> StructureVisitor<'ps> {
 
     /* -----------------  ----------------- */
 
-    fn write_ItemUse(&mut self, vp: &ViewPath, span: Span) {
+    fn write_ItemUse(&mut self, tree: &UseTree) {
         use std::ops::Index;
         use syntex_syntax::ast;
         use syntex_syntax::print::pprust;
@@ -108,43 +108,38 @@ impl<'ps> StructureVisitor<'ps> {
             outString.push_str(&pprust::path_to_string(path));
         }
 
-        match &vp.node {
-            &ViewPathSimple(ref ident, ref path) => {
-                writePath(&mut useSpec, path);
+        match tree.kind {
+            UseTreeKind::Simple(ref ident, _ , _) => {
+                writePath(&mut useSpec, &tree.prefix);
 
-                let path: &ast::Path = path;
+                let path: &ast::Path = &tree.prefix;
                 if path.segments.len() == 0 {
                     return;
                 }
                 let lastSegment = path.segments.index(path.segments.len() - 1);
-                if &lastSegment.identifier != ident {
-                    useSpec.push_str(&" as ");
-                    useSpec.push_str(&*ident.name.as_str());
+                    if let Some(ident) = ident {
+                        if &lastSegment.ident != ident {
+                        useSpec.push_str(&" as ");
+                        useSpec.push_str(&*ident.name.as_str());
+                    }
                 }
             }
-            &ViewPathGlob(ref path) => {
-                useSpec.push_str(&pprust::path_to_string(path));
+            UseTreeKind::Glob => {
+                useSpec.push_str(&pprust::path_to_string(&tree.prefix));
                 useSpec.push_str(&"::*");
             }
-            &ViewPathList(ref path, ref pathListItem) => {
-                writePath(&mut useSpec, path);
+            UseTreeKind::Nested(ref trees) => {
+                writePath(&mut useSpec, &tree.prefix);
 
                 useSpec.push_str("::{ ");
-                for pitem in pathListItem {
-                    let pitem: PathListItem_ = pitem.node;
-
-                    useSpec.push_str(&*pitem.name.name.as_str());
-                    if let Some(rename) = pitem.rename {
-                        useSpec.push_str(" as ");
-                        useSpec.push_str(&*rename.name.as_str());
-                    }
-                    useSpec.push_str(", ");
+                for treenode in trees {
+                    self.write_ItemUse(&treenode.0);
                 }
                 useSpec.push_str("}");
             }
         }
 
-        self.write_element_handled(&useSpec, kind, SourceRange::new(self.codemap, span), "".to_string(), &|_: &mut Self| {})
+        self.write_element_handled(&useSpec, kind, SourceRange::new(self.codemap, tree.span), "".to_string(), &|_: &mut Self| {})
     }
 
     fn get_type_desc_from_fndecl(&mut self, fd: &FnDecl) -> String {
@@ -200,8 +195,8 @@ impl<'v> Visitor<'v> for StructureVisitor<'v> {
     fn visit_name(&mut self, _span: Span, _name: Name) {
         // Nothing to do.
     }
-    fn visit_ident(&mut self, span: Span, ident: Ident) {
-        walk_ident(self, span, ident);
+    fn visit_ident(&mut self, ident: Ident) {
+        walk_ident(self, ident);
     }
 
     fn visit_mod(&mut self, m: &'v Mod, _span: Span, _attrs: &[Attribute], _nodeid: NodeId) {
@@ -223,11 +218,17 @@ impl<'v> Visitor<'v> for StructureVisitor<'v> {
         };
 
         match item.node {
+            ItemKind::Existential(ref _bounds, ref _generics) => {
+                kind = StructureElementKind::Existential;
+            }
+            ItemKind::TraitAlias(ref _generics, ref _bounds) => {
+                kind = StructureElementKind::TraitAlias;
+            }
             ItemKind::ExternCrate(_opt_name) => {
                 kind = StructureElementKind::ExternCrate;
             }
             ItemKind::Use(ref vp) => {
-                self.write_ItemUse(vp, item.span);
+                self.write_ItemUse(vp);
                 return;
             }
             ItemKind::Static(ref typ, _, ref _expr) | ItemKind::Const(ref typ, ref _expr) => {
@@ -237,8 +238,8 @@ impl<'v> Visitor<'v> for StructureVisitor<'v> {
                 self.write_element(item.ident, StructureElementKind::Var, item.span, type_desc, noop_walkFn);
                 return;
             }
-            ItemKind::Fn(ref declaration, unsafety, constness, abi, ref generics, ref body) => {
-                self.visit_fn(FnKind::ItemFn(item.ident, generics, unsafety, constness, abi, &item.vis, body), declaration, item.span, item.id);
+            ItemKind::Fn(ref declaration, header, ref _generics, ref body) => {
+                self.visit_fn(FnKind::ItemFn(item.ident, header, &item.vis, body), declaration, item.span, item.id);
                 return;
             }
             ItemKind::Mod(ref _module) => {
@@ -252,9 +253,6 @@ impl<'v> Visitor<'v> for StructureVisitor<'v> {
             }
             ItemKind::Enum(ref _enum_definition, ref _type_parameters) => {
                 kind = StructureElementKind::Enum;
-            }
-            ItemKind::DefaultImpl(_, ref _trait_ref) => {
-                kind = StructureElementKind::Impl;
             }
             ItemKind::Impl(_, _, ref _type_parameters, _, ref _opt_trait_reference, ref _typ, ref _impl_items) => {
                 kind = StructureElementKind::Impl;
@@ -270,7 +268,7 @@ impl<'v> Visitor<'v> for StructureVisitor<'v> {
                 walk_item(self, item);
                 return;
             }
-            ItemKind::Trait(_, ref _generics, ref _bounds, ref _methods) => {
+            ItemKind::Trait(_, _, ref _generics, ref _bounds, ref _methods) => {
                 kind = StructureElementKind::Trait;
             }
             ItemKind::Mac(ref mac) => {
@@ -365,6 +363,9 @@ impl<'v> Visitor<'v> for StructureVisitor<'v> {
                 walk_impl_item(self, ii);
                 return;
             }
+            ImplItemKind::Existential(_) => {
+                kind = StructureElementKind::Existential;
+            }
         }
 
         self.write_element_TODO(ii.ident, kind, ii.span, |_self: &mut Self| {
@@ -381,7 +382,7 @@ impl<'v> Visitor<'v> for StructureVisitor<'v> {
             FnKind::Method(_ident, ref _MethodSig, _option, _b) => {
                 ident = _ident;
             }
-            FnKind::ItemFn(_ident, ref _Generics, _Unsafety, _Constness, _Abi, _Visibility, _b) => {
+            FnKind::ItemFn(_ident, FnHeader { asyncness: _Asyncness, unsafety: _Unsafety, constness: _Constness, abi: _Abi }, _Visibility, _b) => {
                 ident = _ident;
             }
             FnKind::Closure(_) => {
@@ -404,6 +405,12 @@ impl<'v> Visitor<'v> for StructureVisitor<'v> {
             ForeignItemKind::Static(ref _typ, _) => {
                 kind = StructureElementKind::Var;
             }
+            ForeignItemKind::Ty => {
+                kind = StructureElementKind::TypeAlias;
+            }
+            ForeignItemKind::Macro(_) => {
+                kind = StructureElementKind::MacroDef;
+            }
         }
 
         self.write_element_TODO(foreign_item.ident, kind, foreign_item.span, |_self: &mut Self| {
@@ -414,9 +421,6 @@ impl<'v> Visitor<'v> for StructureVisitor<'v> {
     fn visit_trait_ref(&mut self, t: &'v TraitRef) {
         walk_trait_ref(self, t)
     }
-    fn visit_ty_param_bound(&mut self, bounds: &'v TyParamBound) {
-        walk_ty_param_bound(self, bounds)
-    }
     fn visit_poly_trait_ref(&mut self, t: &'v PolyTraitRef, m: &'v TraitBoundModifier) {
         walk_poly_trait_ref(self, t, m)
     }
@@ -424,10 +428,7 @@ impl<'v> Visitor<'v> for StructureVisitor<'v> {
     fn visit_lifetime(&mut self, lifetime: &'v Lifetime) {
         walk_lifetime(self, lifetime)
     }
-    fn visit_lifetime_def(&mut self, lifetime: &'v LifetimeDef) {
-        walk_lifetime_def(self, lifetime)
-    }
-
+    
     fn visit_local(&mut self, l: &'v Local) {
         walk_local(self, l)
     }
@@ -460,14 +461,8 @@ impl<'v> Visitor<'v> for StructureVisitor<'v> {
     fn visit_path(&mut self, path: &'v Path, _id: NodeId) {
         walk_path(self, path)
     }
-    fn visit_path_list_item(&mut self, prefix: &'v Path, item: &'v PathListItem) {
-        walk_path_list_item(self, prefix, item)
-    }
     fn visit_path_segment(&mut self, path_span: Span, path_segment: &'v PathSegment) {
         walk_path_segment(self, path_span, path_segment)
-    }
-    fn visit_path_parameters(&mut self, path_span: Span, path_parameters: &'v PathParameters) {
-        walk_path_parameters(self, path_span, path_parameters)
     }
     fn visit_assoc_type_binding(&mut self, type_binding: &'v TypeBinding) {
         walk_assoc_type_binding(self, type_binding)

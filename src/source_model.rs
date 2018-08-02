@@ -30,8 +30,8 @@ pub struct SourceRange {
 
 impl SourceRange {
     pub fn new(codemap: &CodeMap, span: Span) -> SourceRange {
-        let startLoc = codemap.lookup_char_pos(span.lo);
-        let endLoc = codemap.lookup_char_pos(span.hi);
+        let startLoc = codemap.lookup_char_pos(span.lo());
+        let endLoc = codemap.lookup_char_pos(span.hi());
 
         SourceRange::from_loc(startLoc, endLoc)
     }
@@ -91,7 +91,9 @@ pub enum StructureElementKind {
     ExternCrate,
     Mod,
     Use,
-    MacroDef, // FIXME: not actually created at the moment
+    MacroDef, 
+    Existential,
+    TraitAlias,
     TypeAlias,
 }
 
@@ -111,6 +113,8 @@ impl StructureElementKind {
             StructureElementKind::Use => "Use",
             StructureElementKind::MacroDef => "Macro",
             StructureElementKind::TypeAlias => "TypeAlias",
+            StructureElementKind::Existential => "Existential",
+            StructureElementKind::TraitAlias => "TraitAlias",
         }
     }
 }

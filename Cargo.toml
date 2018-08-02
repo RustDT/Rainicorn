@@ -4,8 +4,9 @@ version = "2.0.0"
 autobins = false
 
 [dependencies]
-syntex_errors = "^0.59"
-syntex_syntax = "^0.59"
+syntex_errors = { git = "https://github.com/snuk182/syntex" }
+syntex_syntax = { git = "https://github.com/snuk182/syntex" }
+syntex_pos = { git = "https://github.com/snuk182/syntex" }
 rustdt_util ="0.2.3"
 
 [[bin]]
