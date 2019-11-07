@@ -1,11 +1,12 @@
 #![allow(non_snake_case)]
 
-extern crate syntex_syntax;
-extern crate syntex_errors;
-extern crate rustdt_util as util;
+use rustdt_util as util;
+use rustc_errors as syntex_errors;
+use rustc_data_structures;
+use syntax as syntex_syntax;
+use syntax_pos as syntex_pos;
 
-pub mod token_writer;
-pub mod source_model;
 pub mod parse_describe;
+pub mod source_model;
 pub mod structure_visitor;
-
+pub mod token_writer;

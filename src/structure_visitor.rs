@@ -12,268 +12,230 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-
 //!
 //! Write a parse structure into a TokenWriter
-//! 
+//!
 
-use std;
+use crate::source_model::*;
+use crate::util::core::*;
 
-use util::core::*;
-use source_model::*;
-
-use syntex_syntax::visit::*;
-use syntex_syntax::ast::*;
-use syntex_syntax::codemap:: { Span, CodeMap };
+use crate::syntex_syntax::ast::*;
+use crate::syntex_syntax::source_map::{SourceMap, Span};
+use crate::syntex_syntax::visit::*;
 
 pub struct StructureVisitor<'ps> {
-    pub codemap : & 'ps CodeMap,
-    pub parentIsStruct : bool,
-    pub parentIsUnion : bool,
-    pub elements : Vec<StructureElement>,
+    pub codemap: &'ps SourceMap,
+    pub parentIsStruct: bool,
+    pub parentIsUnion: bool,
+    pub elements: Vec<StructureElement>,
 }
 
 impl<'ps> StructureVisitor<'ps> {
-    
-    pub fn new(codemap : &'ps CodeMap) -> StructureVisitor<'ps> {
-        StructureVisitor { 
-            codemap : codemap, parentIsStruct : false, parentIsUnion : false, elements : vec![]
+    pub fn new(codemap: &'ps SourceMap) -> StructureVisitor<'ps> {
+        StructureVisitor {
+            codemap: codemap,
+            parentIsStruct: false,
+            parentIsUnion: false,
+            elements: vec![],
         }
     }
-    
-    pub fn write_element_do<FN>(
-        &mut self, 
-        ident: &str, 
-        kind: StructureElementKind, 
-        sourcerange: SourceRange,
-        type_desc: String,  
-        walkFn: FN
-    ) -> Void
-        where FN : Fn(&mut Self) 
-    {
 
+    pub fn write_element_do<FN>(&mut self, ident: &str, kind: StructureElementKind, sourcerange: SourceRange, type_desc: String, walkFn: FN) -> Void
+    where
+        FN: Fn(&mut Self),
+    {
         let mut siblings = vec![];
         std::mem::swap(&mut self.elements, &mut siblings);
-        
+
         walkFn(self); // self.elements now has children
-        
+
         std::mem::swap(&mut self.elements, &mut siblings);
         let children = siblings;
-        
-        let element = StructureElement{ 
-            name: String::from(ident), 
-            kind: kind, 
-            sourcerange: sourcerange ,
-            type_desc : type_desc,
-            children : children 
+
+        let element = StructureElement {
+            name: String::from(ident),
+            kind: kind,
+            sourcerange: sourcerange,
+            type_desc: type_desc,
+            children: children,
         };
-        
+
         self.elements.push(element);
         Ok(())
     }
-    
-    pub fn write_element_handled<FN>(
-        &mut self, 
-        ident: &str, 
-        kind : StructureElementKind, 
-        sourceRange: SourceRange, 
-        type_desc: String,
-        walkFn : FN)
-        where FN : Fn(&mut Self) 
+
+    pub fn write_element_handled<FN>(&mut self, ident: &str, kind: StructureElementKind, sourceRange: SourceRange, type_desc: String, walkFn: FN)
+    where
+        FN: Fn(&mut Self),
     {
         use std::io::Write;
-        
-        match 
-            self.write_element_do(ident, kind, sourceRange, type_desc, walkFn)
-        {
-            Ok(ok) => { ok } 
-            Err(error) => { 
-                std::io::stderr().write_fmt(format_args!("Error writing element: {}", error)).ok(); 
+
+        match self.write_element_do(ident, kind, sourceRange, type_desc, walkFn) {
+            Ok(ok) => ok,
+            Err(error) => {
+                std::io::stderr().write_fmt(format_args!("Error writing element: {}", error)).ok();
             }
         }
     }
-    
-    pub fn write_element_TODO<FN>(
-        &mut self, 
-        ident: Ident, 
-        kind : StructureElementKind, span: Span, 
-        walkFn : FN
-    )
-        where FN : Fn(&mut Self) 
+
+    pub fn write_element_TODO<FN>(&mut self, ident: Ident, kind: StructureElementKind, span: Span, walkFn: FN)
+    where
+        FN: Fn(&mut Self),
     {
         self.write_element(ident, kind, span, "".to_string(), walkFn);
     }
-    
-    pub fn write_element<FN>(
-        &mut self, 
-        ident: Ident, 
-        kind : StructureElementKind, 
-        span: Span, 
-        type_desc: String, walkFn : FN
-    )
-        where FN : Fn(&mut Self)
+
+    pub fn write_element<FN>(&mut self, ident: Ident, kind: StructureElementKind, span: Span, type_desc: String, walkFn: FN)
+    where
+        FN: Fn(&mut Self),
     {
-        self.write_element_handled(&*ident.name.as_str(), kind, SourceRange::new(self.codemap, span), 
-            type_desc, walkFn)
+        self.write_element_handled(&*ident.name.as_str(), kind, SourceRange::new(self.codemap, span), type_desc, walkFn)
     }
-    
+
     /* -----------------  ----------------- */
-    
-    fn write_ItemUse(&mut self, vp : &ViewPath, span: Span) {
-        use syntex_syntax::print::pprust;
-        use syntex_syntax::ast;
+
+    fn write_ItemUse(&mut self, tree: &UseTree) {
         use std::ops::Index;
-        
+        use crate::syntex_syntax::ast;
+        use crate::syntex_syntax::print::pprust;
+
         let kind = StructureElementKind::Use;
         let mut useSpec = String::new();
-        
-        fn writePath(outString : &mut String, path : &ast::Path) {
+
+        fn writePath(outString: &mut String, path: &ast::Path) {
             outString.push_str(&pprust::path_to_string(path));
         }
-        
-        match &vp.node {
-            &ViewPathSimple(ref ident, ref path) => {
-                writePath(&mut useSpec, path);
-                
-                let path : &ast::Path = path;
+
+        match tree.kind {
+            UseTreeKind::Simple(ref ident, _ , _) => {
+                writePath(&mut useSpec, &tree.prefix);
+
+                let path: &ast::Path = &tree.prefix;
                 if path.segments.len() == 0 {
                     return;
                 }
                 let lastSegment = path.segments.index(path.segments.len() - 1);
-                if &lastSegment.identifier != ident {
-                    useSpec.push_str(&" as ");
-                    useSpec.push_str(&*ident.name.as_str());
-                } 
+                    if let Some(ident) = ident {
+                        if &lastSegment.ident != ident {
+                        useSpec.push_str(&" as ");
+                        useSpec.push_str(&*ident.name.as_str());
+                    }
+                }
             }
-            &ViewPathGlob(ref path) => {
-                useSpec.push_str(&pprust::path_to_string(path));
+            UseTreeKind::Glob => {
+                useSpec.push_str(&pprust::path_to_string(&tree.prefix));
                 useSpec.push_str(&"::*");
             }
-            &ViewPathList(ref path, ref pathListItem) => {
-                writePath(&mut useSpec, path);
-                
+            UseTreeKind::Nested(ref trees) => {
+                writePath(&mut useSpec, &tree.prefix);
+
                 useSpec.push_str("::{ ");
-                for pitem in pathListItem {
-                    let pitem : PathListItem_ = pitem.node;
-                    
-                    useSpec.push_str(&*pitem.name.name.as_str());
-                    if let Some(rename) = pitem.rename {
-                        useSpec.push_str(" as ");
-                        useSpec.push_str(&*rename.name.as_str());
-                    }
-                    useSpec.push_str(", ");
+                for treenode in trees {
+                    self.write_ItemUse(&treenode.0);
                 }
                 useSpec.push_str("}");
             }
         }
 
-        self.write_element_handled(&useSpec, kind, SourceRange::new(self.codemap, span), "".to_string(), 
-            &|_ : &mut Self| { })
+        self.write_element_handled(&useSpec, kind, SourceRange::new(self.codemap, tree.span), "".to_string(), &|_: &mut Self| {})
     }
-    
+
     fn get_type_desc_from_fndecl(&mut self, fd: &FnDecl) -> String {
-        
         let mut type_desc = "".to_string();
-        
+
         type_desc.push('(');
         let mut needs_sep = false;
-        
+
         for arg in &fd.inputs {
-            let arg : &Arg = arg;
-//            let pat : &Pat_ = &arg.pat.node;
             let pat_span = arg.pat.span;
-            
+
             if needs_sep {
                 type_desc.push_str(", ");
             }
             needs_sep = true;
-            
+
             if let Ok(snippet) = self.codemap.span_to_snippet(arg.ty.span) {
                 if !snippet.is_empty() {
                     type_desc.push_str(&snippet);
                     continue;
                 }
             }
-            
+
             if let Ok(snippet) = self.codemap.span_to_snippet(pat_span) {
                 if snippet.ends_with("self") {
                     type_desc.push_str(&snippet);
                     continue;
                 }
             }
-        };
+        }
         type_desc.push_str(")");
-        
+
         if let FunctionRetTy::Ty(ref _ret) = fd.output {
             if let Ok(ret_snippet) = self.codemap.span_to_snippet(fd.output.span()) {
                 type_desc.push_str(" -> ");
                 type_desc.push_str(&ret_snippet);
             }
         }
-        
+
         type_desc
     }
-    
-    fn write_function_element(&mut self, ident: Ident, span: Span, fd: & FnDecl, walkFn : &Fn(&mut Self)) {
+
+    fn write_function_element(&mut self, ident: Ident, span: Span, fd: &FnDecl, walkFn: &dyn Fn(&mut Self)) {
         let type_desc = self.get_type_desc_from_fndecl(&fd);
-        
+
         self.write_element(ident, StructureElementKind::Function, span, type_desc, walkFn);
     }
-    
 }
 
-impl<'v> Visitor for StructureVisitor<'v> {
-    
+impl<'v> Visitor<'v> for StructureVisitor<'v> {
     fn visit_name(&mut self, _span: Span, _name: Name) {
         // Nothing to do.
     }
-    fn visit_ident(&mut self, span: Span, ident: Ident) {
-        walk_ident(self, span, ident);
+    fn visit_ident(&mut self, ident: Ident) {
+        walk_ident(self, ident);
     }
-    
-    fn visit_mod(&mut self, m: &Mod, _span: Span, _nodeid: NodeId) {
-        
-//        let sr = &SourceRange::new(self.codemap, span);
-//        self.write_element_handled("_file_", StructureElementKind::File, sr, |_self : &mut Self| { 
-//            walk_mod(_self, m);
-//        })
+
+    fn visit_mod(&mut self, m: &'v Mod, _span: Span, _attrs: &[Attribute], _nodeid: NodeId) {
+        //        let sr = &SourceRange::new(self.codemap, span);
+        //        self.write_element_handled("_file_", StructureElementKind::File, sr, |_self : &mut Self| {
+        //            walk_mod(_self, m);
+        //        })
         walk_mod(self, m);
     }
-    
-    fn visit_item(&mut self, item: &Item) {
-        
+
+    fn visit_item(&mut self, item: &'v Item) {
         let kind;
         let mut type_desc = "".to_string();
-        
-        let noop_walkFn = &|_self : &mut Self| { };
-        
-        let walkFn : &Fn(&mut Self) = &|_self : &mut Self| { 
-            walk_item(_self, item); 
+
+        let noop_walkFn = &|_self: &mut Self| {};
+
+        let walkFn: &dyn Fn(&mut Self) = &|_self: &mut Self| {
+            walk_item(_self, item);
         };
-        
-        match item.node {
+
+        match item.kind {
+            ItemKind::OpaqueTy(ref _bounds, ref _generics) => {
+                kind = StructureElementKind::OpaqueTy;
+            }
+            ItemKind::TraitAlias(ref _generics, ref _bounds) => {
+                kind = StructureElementKind::TraitAlias;
+            }
             ItemKind::ExternCrate(_opt_name) => {
                 kind = StructureElementKind::ExternCrate;
             }
             ItemKind::Use(ref vp) => {
-                self.write_ItemUse(vp, item.span);
+                self.write_ItemUse(vp);
                 return;
             }
-            ItemKind::Static(ref typ, _, ref _expr) |
-            ItemKind::Const(ref typ, ref _expr) => {
-                
+            ItemKind::Static(ref typ, _, ref _expr) | ItemKind::Const(ref typ, ref _expr) => {
                 if let Ok(snippet) = self.codemap.span_to_snippet(typ.span) {
                     type_desc.push_str(&snippet);
                 }
                 self.write_element(item.ident, StructureElementKind::Var, item.span, type_desc, noop_walkFn);
                 return;
             }
-            ItemKind::Fn(ref declaration, unsafety, constness, abi, ref generics, ref body) => {
-                self.visit_fn(FnKind::ItemFn(item.ident, generics, unsafety, constness, abi, &item.vis),
-                                 declaration,
-                                 body,
-                                 item.span,
-                                 item.id);
+            ItemKind::Fn(ref declaration, ref header, ref _generics, ref body) => {
+                self.visit_fn(FnKind::ItemFn(item.ident, header, &item.vis, body), declaration, item.span, item.id);
                 return;
             }
             ItemKind::Mod(ref _module) => {
@@ -282,17 +244,14 @@ impl<'v> Visitor for StructureVisitor<'v> {
             ItemKind::ForeignMod(ref _foreign_module) => {
                 kind = StructureElementKind::Mod;
             }
-            ItemKind::Ty(ref _typ, ref _type_parameters) => {
+            ItemKind::TyAlias(ref _typ, ref _type_parameters) => {
                 kind = StructureElementKind::TypeAlias;
             }
             ItemKind::Enum(ref _enum_definition, ref _type_parameters) => {
                 kind = StructureElementKind::Enum;
             }
-            ItemKind::DefaultImpl(_, ref _trait_ref) => {
+            ItemKind::Impl(_, _, ref _type_parameters, _, ref _opt_trait_reference, ref _typ, ref _impl_items) => {
                 kind = StructureElementKind::Impl;
-            }
-            ItemKind::Impl(_, _, ref _type_parameters, ref _opt_trait_reference, ref _typ, ref _impl_items) => {
-                 kind = StructureElementKind::Impl;
             }
             ItemKind::Struct(ref _struct_definition, ref _generics) => {
                 // Go straight in
@@ -305,29 +264,37 @@ impl<'v> Visitor for StructureVisitor<'v> {
                 walk_item(self, item);
                 return;
             }
-            ItemKind::Trait(_, ref _generics, ref _bounds, ref _methods) => {
+            ItemKind::Trait(_, _, ref _generics, ref _bounds, ref _methods) => {
                 kind = StructureElementKind::Trait;
             }
             ItemKind::Mac(ref mac) => {
                 self.visit_mac(mac);
                 return;
             }
+            ItemKind::GlobalAsm(ref asm) => {
+                self.visit_global_asm(asm);
+                return;
+            }
+            ItemKind::MacroDef(ref macro_def) => {
+                self.visit_mac_def(macro_def, item.id);
+                return;
+            }
         }
-        
+
         self.write_element(item.ident, kind, item.span, type_desc, walkFn);
     }
-    
-    fn visit_enum_def(&mut self, enum_def: &EnumDef, generics: &Generics, nodeid: NodeId, _span: Span) {
+
+    fn visit_enum_def(&mut self, enum_def: &'v EnumDef, generics: &'v Generics, nodeid: NodeId, _span: Span) {
         // This element is covered by an item definition
         walk_enum_def(self, enum_def, generics, nodeid)
     }
-    
-    fn visit_variant(&mut self, v: &Variant, g: &Generics, nodeid: NodeId) {
+
+    fn visit_variant(&mut self, v: &'v Variant) {
         // This element is covered by an enum_def call
-        walk_variant(self, v, g, nodeid);
+        walk_variant(self, v);
     }
-    
-    fn visit_variant_data(&mut self, s: &VariantData, ident: Ident, _: &Generics, _: NodeId, span: Span) {
+
+    fn visit_variant_data(&mut self, s: &'v VariantData) {
         let mut kind = StructureElementKind::EnumVariant;
         if self.parentIsStruct {
             kind = StructureElementKind::Struct;
@@ -337,29 +304,35 @@ impl<'v> Visitor for StructureVisitor<'v> {
             kind = StructureElementKind::Union;
             self.parentIsUnion = false;
         }
-        
-        self.write_element_TODO(ident, kind, span, |_self : &mut Self| { 
-            walk_struct_def(_self, s);
-        });
+        match s {
+            VariantData::Struct(fields, _) | VariantData::Tuple(fields, _) => {
+                for field in fields {
+                    self.write_element_TODO(field.ident.unwrap_or(Ident::invalid()), kind, field.span, |_self: &mut Self| {
+                        walk_struct_def(_self, s);
+                    });
+                }
+            },
+            VariantData::Unit(_) => return,
+        };
     }
-    
-    fn visit_struct_field(&mut self, sf: &StructField) {
+
+    fn visit_struct_field(&mut self, sf: &'v StructField) {
         if let Some(ident) = sf.ident {
-            self.write_element_TODO(ident, StructureElementKind::Var, sf.span, |_self : &mut Self| { 
-                walk_struct_field(_self, sf); 
+            self.write_element_TODO(ident, StructureElementKind::Var, sf.span, |_self: &mut Self| {
+                walk_struct_field(_self, sf);
             });
         }
     }
-    
-    fn visit_trait_item(&mut self, ti: &TraitItem) {
+
+    fn visit_trait_item(&mut self, ti: &'v TraitItem) {
         let kind;
-        
-        match ti.node {
+
+        match ti.kind {
             TraitItemKind::Const(ref _ty, ref _default) => {
                 kind = StructureElementKind::Var;
             }
             TraitItemKind::Method(ref sig, _) => {
-                self.write_function_element(ti.ident, ti.span, &sig.decl, &|_self : &mut Self| { 
+                self.write_function_element(ti.ident, ti.span, &sig.decl, &|_self: &mut Self| {
                     walk_trait_item(_self, ti);
                 });
                 return;
@@ -372,243 +345,225 @@ impl<'v> Visitor for StructureVisitor<'v> {
                 return;
             }
         }
-        
-        self.write_element_TODO(ti.ident, kind, ti.span, |_self : &mut Self| { 
-            walk_trait_item(_self, ti); 
+
+        self.write_element_TODO(ti.ident, kind, ti.span, |_self: &mut Self| {
+            walk_trait_item(_self, ti);
         });
     }
-    
-    fn visit_impl_item(&mut self, ii: &ImplItem) {
+
+    fn visit_impl_item(&mut self, ii: &'v ImplItem) {
         let kind;
-        
-        match ii.node {
+
+        match ii.kind {
             ImplItemKind::Const(ref _ty, ref _default) => {
                 kind = StructureElementKind::Var;
             }
-            ImplItemKind::Type(ref _type)  => {
+            ImplItemKind::TyAlias(ref _type) => {
                 kind = StructureElementKind::TypeAlias;
             }
-            ImplItemKind::Method(_, _) |
-            ImplItemKind::Macro(_) => {
+            ImplItemKind::Method(_, _) | ImplItemKind::Macro(_) => {
                 walk_impl_item(self, ii);
                 return;
             }
+            ImplItemKind::OpaqueTy(_) => {
+                kind = StructureElementKind::OpaqueTy;
+            }
         }
-        
-        self.write_element_TODO(ii.ident, kind, ii.span, |_self : &mut Self| { 
+
+        self.write_element_TODO(ii.ident, kind, ii.span, |_self: &mut Self| {
             walk_impl_item(_self, ii);
         });
     }
-    
+
     /* ----------------- Function ----------------- */
-    
-    fn visit_fn(&mut self, fk: FnKind, fd: &FnDecl, b: &Block, span: Span, _nodeid: NodeId) {
-        
-        let ident : Ident;
-        
+
+    fn visit_fn(&mut self, fk: FnKind<'v>, fd: &'v FnDecl, span: Span, _nodeid: NodeId) {
+        let ident: Ident;
+
         match fk {
-            FnKind::Method(_ident, ref _MethodSig, _option) => { 
-                ident = _ident; 
+            FnKind::Method(_ident, ref _MethodSig, _option, _b) => {
+                ident = _ident;
             }
-            FnKind::ItemFn(_ident, ref _Generics, _Unsafety, _Constness, _Abi, _Visibility) => {
-                ident = _ident; 
+            FnKind::ItemFn(_ident, FnHeader { asyncness: _Asyncness, unsafety: _Unsafety, constness: _Constness, abi: _Abi }, _Visibility, _b) => {
+                ident = _ident;
             }
-            FnKind::Closure => { return; }
+            FnKind::Closure(_) => {
+                return;
+            }
         };
-        
-        self.write_function_element(ident, span, fd, &|_self : &mut Self| { 
-            walk_fn(_self, fk, fd, b, span);
+
+        self.write_function_element(ident, span, fd, &|_self: &mut Self| {
+            walk_fn(_self, fk, fd, span);
         });
     }
-    
-    fn visit_foreign_item(&mut self, foreign_item: &ForeignItem) { 
+
+    fn visit_foreign_item(&mut self, foreign_item: &'v ForeignItem) {
         let kind;
-        
-        match foreign_item.node {
+
+        match foreign_item.kind {
             ForeignItemKind::Fn(ref _function_declaration, ref _generics) => {
                 kind = StructureElementKind::Function;
             }
             ForeignItemKind::Static(ref _typ, _) => {
                 kind = StructureElementKind::Var;
             }
+            ForeignItemKind::Ty => {
+                kind = StructureElementKind::TypeAlias;
+            }
+            ForeignItemKind::Macro(_) => {
+                kind = StructureElementKind::MacroDef;
+            }
         }
-        
-        self.write_element_TODO(foreign_item.ident, kind, foreign_item.span, |_self : &mut Self| { 
-            walk_foreign_item(_self, foreign_item); 
+
+        self.write_element_TODO(foreign_item.ident, kind, foreign_item.span, |_self: &mut Self| {
+            walk_foreign_item(_self, foreign_item);
         });
     }
-    
-    
-    fn visit_trait_ref(&mut self, t: &TraitRef) { 
-        walk_trait_ref(self, t) 
+
+    fn visit_trait_ref(&mut self, t: &'v TraitRef) {
+        walk_trait_ref(self, t)
     }
-    fn visit_ty_param_bound(&mut self, bounds: &TyParamBound) {
-        walk_ty_param_bound(self, bounds)
-    }
-    fn visit_poly_trait_ref(&mut self, t: &PolyTraitRef, m: &TraitBoundModifier) {
+    fn visit_poly_trait_ref(&mut self, t: &'v PolyTraitRef, m: &'v TraitBoundModifier) {
         walk_poly_trait_ref(self, t, m)
     }
-    
-    fn visit_lifetime(&mut self, lifetime: &Lifetime) {
+
+    fn visit_lifetime(&mut self, lifetime: &'v Lifetime) {
         walk_lifetime(self, lifetime)
     }
-    fn visit_lifetime_def(&mut self, lifetime: &LifetimeDef) {
-        walk_lifetime_def(self, lifetime)
-    }
     
-    fn visit_local(&mut self, l: &Local) { 
-        walk_local(self, l) 
+    fn visit_local(&mut self, l: &'v Local) {
+        walk_local(self, l)
     }
-    fn visit_block(&mut self, b: &Block) { 
-        walk_block(self, b) 
+    fn visit_block(&mut self, b: &'v Block) {
+        walk_block(self, b)
     }
-    fn visit_stmt(&mut self, s: &Stmt) { 
-        walk_stmt(self, s) 
+    fn visit_stmt(&mut self, s: &'v Stmt) {
+        walk_stmt(self, s)
     }
-    fn visit_arm(&mut self, a: &Arm) { 
-        walk_arm(self, a) 
+    fn visit_arm(&mut self, a: &'v Arm) {
+        walk_arm(self, a)
     }
-    fn visit_pat(&mut self, p: &Pat) { 
-        walk_pat(self, p) 
+    fn visit_pat(&mut self, p: &'v Pat) {
+        walk_pat(self, p)
     }
     fn visit_expr(&mut self, _ex: &Expr) {
-        // Comment, no need to visit node insinde expressions 
-        //walk_expr(self, ex) 
+        // Comment, no need to visit node insinde expressions
+        //walk_expr(self, ex)
     }
-    fn visit_expr_post(&mut self, _ex: &Expr) { 
+    fn visit_expr_post(&mut self, _ex: &Expr) {}
+    fn visit_ty(&mut self, t: &'v Ty) {
+        walk_ty(self, t)
     }
-    fn visit_ty(&mut self, t: &Ty) { 
-        walk_ty(self, t) 
+    fn visit_generics(&mut self, g: &'v Generics) {
+        walk_generics(self, g)
     }
-    fn visit_generics(&mut self, g: &Generics) { 
-        walk_generics(self, g) 
+    fn visit_mac(&mut self, mac: &'v Mac) {
+        walk_mac(self, mac)
     }
-    
-    
-    fn visit_mac(&mut self, _mac: &Mac) {
-        //panic!("visit_mac disabled by default");
-        
-        // NB: see note about macros above.
-        // if you really want a visitor that
-        // works on macros, use this
-        // definition in your trait impl:
-        // visit::walk_mac(self, _mac)
-    }
-    fn visit_path(&mut self, path: &Path, _id: NodeId) {
+    fn visit_path(&mut self, path: &'v Path, _id: NodeId) {
         walk_path(self, path)
     }
-    fn visit_path_list_item(&mut self, prefix: &Path, item: &PathListItem) {
-        walk_path_list_item(self, prefix, item)
-    }
-    fn visit_path_segment(&mut self, path_span: Span, path_segment: &PathSegment) {
+    fn visit_path_segment(&mut self, path_span: Span, path_segment: &'v PathSegment) {
         walk_path_segment(self, path_span, path_segment)
     }
-    fn visit_path_parameters(&mut self, path_span: Span, path_parameters: &PathParameters) {
-        walk_path_parameters(self, path_span, path_parameters)
-    }
-    fn visit_assoc_type_binding(&mut self, type_binding: &TypeBinding) {
-        walk_assoc_type_binding(self, type_binding)
-    }
-    fn visit_attribute(&mut self, _attr: &Attribute) {
-    }
-    fn visit_macro_def(&mut self, macro_def: &MacroDef) {
-        walk_macro_def(self, macro_def)
-    }
-    
-    fn visit_vis(&mut self, vis: &Visibility) {
+    fn visit_attribute(&mut self, _attr: &Attribute) {}
+    fn visit_vis(&mut self, vis: &'v Visibility) {
         walk_vis(self, vis)
     }
 }
 
-
-
 #[test]
 fn tests_describe_structure() {
-    
-    use std::rc::Rc;
     use std::cell::RefCell;
-    use parse_describe;
-    use token_writer::TokenWriter;
-    use util::tests::*;
-
+    use std::rc::Rc;
     
-    fn test_describe_structure(source : &str, expected : &str) {
+    use crate::parse_describe;
+    use crate::token_writer::TokenWriter;
+    use crate::util::tests::*;
+
+    fn test_describe_structure(source: &str, expected: &str) {
         let stringRc = Rc::new(RefCell::new(String::new()));
-        
+
         {
             let (messages, elements) = parse_describe::parse_crate_with_messages(source);
-            
-            let mut tokenWriter = TokenWriter { out : stringRc.clone() };
+
+            let mut tokenWriter = TokenWriter { out: stringRc.clone() };
             parse_describe::write_parse_analysis_contents(messages, elements, &mut tokenWriter).ok().unwrap();
         }
-        
-        let expected : &str = &(String::from("MESSAGES {\n}") + 
-            (if expected.is_empty() { "" } else { "\n" }) + expected);
-        
+
+        let expected: &str = &(String::from("MESSAGES {\n}") + (if expected.is_empty() { "" } else { "\n" }) + expected);
+
         let result = unwrap_Rc_RefCell(stringRc);
         let result = result.trim();
         check_equal(result, expected);
     }
-    
+
     test_describe_structure("extern crate xx;", r#"ExternCrate { "xx" { 0:0 0:16 } {} "" {} }"#);
-    
+
     test_describe_structure("const xx : u32 = 1;", r#"Var { "xx" { 0:0 0:19 } {} "u32" {} }"#);
-    
-    
+
     test_describe_structure("mod myMod   ;  ", r#"Mod { "myMod" { 0:0 0:13 } {} "" {} }"#);
     test_describe_structure("mod myMod { }", r#"Mod { "myMod" { 0:0 0:13 } {} "" {} }"#);
-    test_describe_structure("mod myMod { static xx : u32 = 2; }", 
-r#"Mod { "myMod" { 0:0 0:34 } {} "" {}
+    test_describe_structure(
+        "mod myMod { static xx : u32 = 2; }",
+        r#"Mod { "myMod" { 0:0 0:34 } {} "" {}
   Var { "xx" { 0:12 0:32 } {} "u32" {} }
-}"#
+}"#,
     );
-    
+
     test_describe_structure("fn xx() { }", r#"Function { "xx" { 0:0 0:11 } {} "()" {} }"#);
-    test_describe_structure("fn xx(a : &str) -> u32 { }", 
-        r#"Function { "xx" { 0:0 0:26 } {} "(&str) -> u32" {} }"#);
-    test_describe_structure("fn xx(blah : Vec<u32>, x : &'v str) -> u32 { }", 
-        r#"Function { "xx" { 0:0 0:46 } {} "(Vec<u32>, &'v str) -> u32" {} }"#);
+    test_describe_structure("fn xx(a : &str) -> u32 { }", r#"Function { "xx" { 0:0 0:26 } {} "(&str) -> u32" {} }"#);
+    test_describe_structure("fn xx(blah : Vec<u32>, x : &'v str) -> u32 { }", r#"Function { "xx" { 0:0 0:46 } {} "(Vec<u32>, &'v str) -> u32" {} }"#);
     // Test "deceiving" case
-    test_describe_structure("fn xx(my_self : &str) -> u32 { }", 
-        r#"Function { "xx" { 0:0 0:32 } {} "(&str) -> u32" {} }"#);
-    
+    test_describe_structure("fn xx(my_self : &str) -> u32 { }", r#"Function { "xx" { 0:0 0:32 } {} "(&str) -> u32" {} }"#);
+
     test_describe_structure("type MyType = &u32<asd>;", r#"TypeAlias { "MyType" { 0:0 0:24 } {} "" {} }"#);
-    
-    test_describe_structure("enum MyEnum { Alpha, Beta, } ", 
-r#"Enum { "MyEnum" { 0:0 0:28 } {} "" {}
+
+    test_describe_structure(
+        "enum MyEnum { Alpha, Beta, } ",
+        r#"Enum { "MyEnum" { 0:0 0:28 } {} "" {}
   EnumVariant { "Alpha" { 0:14 0:19 } {} "" {} }
   EnumVariant { "Beta" { 0:21 0:25 } {} "" {} }
-}"#);
-    test_describe_structure("enum MyEnum<T, U> { Alpha(T), Beta(U), } ", 
-r#"Enum { "MyEnum" { 0:0 0:40 } {} "" {}
+}"#,
+    );
+    test_describe_structure(
+        "enum MyEnum<T, U> { Alpha(T), Beta(U), } ",
+        r#"Enum { "MyEnum" { 0:0 0:40 } {} "" {}
   EnumVariant { "Alpha" { 0:20 0:28 } {} "" {} }
   EnumVariant { "Beta" { 0:30 0:37 } {} "" {} }
-}"#);
-    
-    
-    test_describe_structure("struct MyStruct ( u32, blah<sdf> ); ", 
-r#"Struct { "MyStruct" { 0:0 0:35 } {} "" {} }"#);
-    test_describe_structure("struct MyStruct { foo : u32, } ", 
-r#"Struct { "MyStruct" { 0:0 0:30 } {} "" {}
+}"#,
+    );
+
+    test_describe_structure("struct MyStruct ( u32, blah<sdf> ); ", r#"Struct { "MyStruct" { 0:0 0:35 } {} "" {} }"#);
+    test_describe_structure(
+        "struct MyStruct { foo : u32, } ",
+        r#"Struct { "MyStruct" { 0:0 0:30 } {} "" {}
   Var { "foo" { 0:18 0:27 } {} "" {} }
-}"#);
-    test_describe_structure("union MyUnion { foo : u32, } ", 
-r#"Union { "MyUnion" { 0:0 0:28 } {} "" {}
+}"#,
+    );
+    test_describe_structure(
+        "union MyUnion { foo : u32, } ",
+        r#"Union { "MyUnion" { 0:0 0:28 } {} "" {}
   Var { "foo" { 0:16 0:25 } {} "" {} }
-}"#);
-    
+}"#,
+    );
+
     test_describe_structure("trait MyTrait { } ", r#"Trait { "MyTrait" { 0:0 0:17 } {} "" {} }"#);
-    test_describe_structure("trait MyTrait : Foo { fn xxx(); } ", 
-r#"Trait { "MyTrait" { 0:0 0:33 } {} "" {}
+    test_describe_structure(
+        "trait MyTrait : Foo { fn xxx(); } ",
+        r#"Trait { "MyTrait" { 0:0 0:33 } {} "" {}
   Function { "xxx" { 0:22 0:31 } {} "()" {} }
-}"#);
-    test_describe_structure("trait MyTrait : Foo { type N: fmt::Display; fn xxx(&self); const foo :u32 = 3; } ", 
-r#"Trait { "MyTrait" { 0:0 0:80 } {} "" {}
+}"#,
+    );
+    test_describe_structure(
+        "trait MyTrait : Foo { type N: fmt::Display; fn xxx(&self); const foo :u32 = 3; } ",
+        r#"Trait { "MyTrait" { 0:0 0:80 } {} "" {}
   TypeAlias { "N" { 0:22 0:43 } {} "" {} }
   Function { "xxx" { 0:44 0:58 } {} "(&self)" {} }
   Var { "foo" { 0:59 0:78 } {} "" {} }
-}"#);
-    
+}"#,
+    );
+
     /* FIXME: review
     test_describe_structure("impl MyType { } ", r#"Impl { "MyType" { 0:0 0:15 } {} "" {} }"#);
     test_describe_structure("impl MyTrait for MyType { } ", r#"Impl { "MyType.MyTrait" { 0:0 0:27 } {} "" {} }"#);
@@ -619,42 +574,41 @@ r#"Impl { "MyTrait" { 0:0 0:75 } {} "" {}
   Var { "foo" { 0:54 0:73 } {} "" {} }
 }"#);
     */
-    
-    
+
     test_describe_structure("use blah;", r#"Use { "blah" { 0:0 0:9 } {} "" {} }"#);
     test_describe_structure("use blah as foo;", r#"Use { "blah as foo" { 0:0 0:16 } {} "" {} }"#);
     // TODO: this is not printing the global path prefix, seems to be a limitation from libsyntax?
     test_describe_structure("use ::blah::foo as myfoo;", r#"Use { "::blah::foo as myfoo" { 0:0 0:25 } {} "" {} }"#);
     test_describe_structure("use ::blah::foo::*;", r#"Use { "::blah::foo::*" { 0:0 0:19 } {} "" {} }"#);
-    test_describe_structure("use blah::foo:: { One as OtherOne, self as Two };", 
-        r#"Use { "blah::foo::{ One as OtherOne, self as Two, }" { 0:0 0:49 } {} "" {} }"#);
-    
-    
+    test_describe_structure("use blah::foo:: { One as OtherOne, self as Two };", r#"Use { "blah::foo::{ One as OtherOne, self as Two, }" { 0:0 0:49 } {} "" {} }"#);
+
     test_describe_structure("my_macro!(asf); ", "");
-    
-    // test: visit_mac! visit method 
+
+    // test: visit_mac! visit method
     test_describe_structure("fn foo() { my_macro!(asf); }", r#"Function { "foo" { 0:0 0:28 } {} "()" {} }"#);
-    
+
     test_describe_structure("macro_rules! foo { (x => $e:expr) => (); }", r#""#);
     // TODO: macro definitions, unfortunately can't get that info easily from syntax_syntex
-//    test_describe_structure("macro_rules! five_times { ($x:expr) => (5 * $x); }", 
-//        r#"Macro { "foo" { 0:0 0:28 } {} "" {} }"#);
-    
+    //    test_describe_structure("macro_rules! five_times { ($x:expr) => (5 * $x); }",
+    //        r#"Macro { "foo" { 0:0 0:28 } {} "" {} }"#);
+
     // Test pub extern
-    test_describe_structure("pub extern crate my_crate;", 
-        r#"ExternCrate { "my_crate" { 0:0 0:26 } {} "" {} }"#
-    );
-    
-    test_describe_structure("extern { fn ext(p : u32); }", 
-r#"Mod { "" { 0:0 0:27 } {} "" {}
+    test_describe_structure("pub extern crate my_crate;", r#"ExternCrate { "my_crate" { 0:0 0:26 } {} "" {} }"#);
+
+    test_describe_structure(
+        "extern { fn ext(p : u32); }",
+        r#"Mod { "" { 0:0 0:27 } {} "" {}
   Function { "ext" { 0:9 0:25 } {} "" {} }
-}"#);
-    test_describe_structure("extern { fn ext(p : u32); \n static extVar: u8; }", 
-r#"Mod { "" { 0:0 1:21 } {} "" {}
+}"#,
+    );
+    test_describe_structure(
+        "extern { fn ext(p : u32); \n static extVar: u8; }",
+        r#"Mod { "" { 0:0 1:21 } {} "" {}
   Function { "ext" { 0:9 0:25 } {} "" {} }
   Var { "extVar" { 1:1 1:19 } {} "" {} }
-}"#);
-    
-    // Test with a lexer error, 
-//    test_describe_structure("const xx : u32 = '", r#"Var { "xx" { 1 0 1 19 } {} {} {} }"#);    
+}"#,
+    );
+
+    // Test with a lexer error,
+    //    test_describe_structure("const xx : u32 = '", r#"Var { "xx" { 1 0 1 19 } {} {} {} }"#);
 }

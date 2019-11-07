@@ -1,14 +1,19 @@
 [package]
 name = "rainicorn"
-version = "2.0.0"
+version = "3.0.0"
+autobins = false
+edition = "2018"
 
 [dependencies]
-syntex_errors = "0.48.0"
-syntex_syntax = "0.48.0"
+rustc_errors = { git = "https://github.com/snuk182/rustc-syntax-tools" }
+rustc_data_structures = { git = "https://github.com/snuk182/rustc-syntax-tools" }
+syntax = { git = "https://github.com/snuk182/rustc-syntax-tools" }
+syntax_pos = { git = "https://github.com/snuk182/rustc-syntax-tools" }
 rustdt_util ="0.2.3"
 
 [[bin]]
 name = "parse_describe"
+path = "src/main.rs"
 test = false
 
 [lib]
