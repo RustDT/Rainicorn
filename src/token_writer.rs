@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use util::core::*;
+use crate::util::core::*;
 
 use std::fmt;
 use std::result;
@@ -22,7 +22,7 @@ pub use std::rc::Rc;
 
 /// Write a parse structure into a serialized format
 pub struct TokenWriter {
-    pub out: Rc<RefCell<fmt::Write>>,
+    pub out: Rc<RefCell<dyn fmt::Write>>,
 }
 
 impl fmt::Debug for TokenWriter {
@@ -32,7 +32,7 @@ impl fmt::Debug for TokenWriter {
 }
 
 impl TokenWriter {
-    pub fn get_output(&self) -> RefMut<fmt::Write + 'static> {
+    pub fn get_output(&self) -> RefMut<dyn fmt::Write + 'static> {
         self.out.borrow_mut()
     }
 
@@ -41,7 +41,7 @@ impl TokenWriter {
     }
 
     pub fn write_string_token(&mut self, string: &str) -> result::Result<(), fmt::Error> {
-        try!(write_escaped_string(string, &mut *self.get_output()));
+        write_escaped_string(string, &mut *self.get_output())?;
 
         self.get_output().write_char(' ')
     }
@@ -53,8 +53,8 @@ impl TokenWriter {
             }
         }
 
-        try!(self.get_output().write_str(string));
-        try!(self.get_output().write_char(' '));
+        self.get_output().write_str(string)?;
+        self.get_output().write_char(' ')?;
 
         Ok(())
     }
@@ -83,16 +83,16 @@ pub fn write_escaped_string<OUT: ?Sized + fmt::Write>(string: &str, out: &mut OU
 //pub fn write_string_token<ERR, OUT : ?Sized + CharOutput<ERR>>(string : &str, out : &mut OUT) 
 //    -> result::Result<(), ERR>
 {
-    try!(out.write_char('"'));
+    out.write_char('"')?;
 
     for ch in string.chars() {
         if ch == '"' || ch == '\\' {
-            try!(out.write_char('\\'));
+            out.write_char('\\')?;
         }
-        try!(out.write_char(ch));
+        out.write_char(ch)?;
     }
 
-    try!(out.write_char('"'));
+    out.write_char('"')?;
 
     Ok(())
 }

@@ -16,24 +16,22 @@
 //! Write a parse structure into a TokenWriter
 //!
 
-use std;
+use crate::source_model::*;
+use crate::util::core::*;
 
-use source_model::*;
-use util::core::*;
-
-use syntex_syntax::ast::*;
-use syntex_syntax::codemap::{CodeMap, Span};
-use syntex_syntax::visit::*;
+use crate::syntex_syntax::ast::*;
+use crate::syntex_syntax::source_map::{SourceMap, Span};
+use crate::syntex_syntax::visit::*;
 
 pub struct StructureVisitor<'ps> {
-    pub codemap: &'ps CodeMap,
+    pub codemap: &'ps SourceMap,
     pub parentIsStruct: bool,
     pub parentIsUnion: bool,
     pub elements: Vec<StructureElement>,
 }
 
 impl<'ps> StructureVisitor<'ps> {
-    pub fn new(codemap: &'ps CodeMap) -> StructureVisitor<'ps> {
+    pub fn new(codemap: &'ps SourceMap) -> StructureVisitor<'ps> {
         StructureVisitor {
             codemap: codemap,
             parentIsStruct: false,
@@ -98,8 +96,8 @@ impl<'ps> StructureVisitor<'ps> {
 
     fn write_ItemUse(&mut self, tree: &UseTree) {
         use std::ops::Index;
-        use syntex_syntax::ast;
-        use syntex_syntax::print::pprust;
+        use crate::syntex_syntax::ast;
+        use crate::syntex_syntax::print::pprust;
 
         let kind = StructureElementKind::Use;
         let mut useSpec = String::new();
@@ -149,8 +147,6 @@ impl<'ps> StructureVisitor<'ps> {
         let mut needs_sep = false;
 
         for arg in &fd.inputs {
-            let arg: &Arg = arg;
-            //            let pat : &Pat_ = &arg.pat.node;
             let pat_span = arg.pat.span;
 
             if needs_sep {
@@ -184,7 +180,7 @@ impl<'ps> StructureVisitor<'ps> {
         type_desc
     }
 
-    fn write_function_element(&mut self, ident: Ident, span: Span, fd: &FnDecl, walkFn: &Fn(&mut Self)) {
+    fn write_function_element(&mut self, ident: Ident, span: Span, fd: &FnDecl, walkFn: &dyn Fn(&mut Self)) {
         let type_desc = self.get_type_desc_from_fndecl(&fd);
 
         self.write_element(ident, StructureElementKind::Function, span, type_desc, walkFn);
@@ -213,13 +209,13 @@ impl<'v> Visitor<'v> for StructureVisitor<'v> {
 
         let noop_walkFn = &|_self: &mut Self| {};
 
-        let walkFn: &Fn(&mut Self) = &|_self: &mut Self| {
+        let walkFn: &dyn Fn(&mut Self) = &|_self: &mut Self| {
             walk_item(_self, item);
         };
 
-        match item.node {
-            ItemKind::Existential(ref _bounds, ref _generics) => {
-                kind = StructureElementKind::Existential;
+        match item.kind {
+            ItemKind::OpaqueTy(ref _bounds, ref _generics) => {
+                kind = StructureElementKind::OpaqueTy;
             }
             ItemKind::TraitAlias(ref _generics, ref _bounds) => {
                 kind = StructureElementKind::TraitAlias;
@@ -238,7 +234,7 @@ impl<'v> Visitor<'v> for StructureVisitor<'v> {
                 self.write_element(item.ident, StructureElementKind::Var, item.span, type_desc, noop_walkFn);
                 return;
             }
-            ItemKind::Fn(ref declaration, header, ref _generics, ref body) => {
+            ItemKind::Fn(ref declaration, ref header, ref _generics, ref body) => {
                 self.visit_fn(FnKind::ItemFn(item.ident, header, &item.vis, body), declaration, item.span, item.id);
                 return;
             }
@@ -248,7 +244,7 @@ impl<'v> Visitor<'v> for StructureVisitor<'v> {
             ItemKind::ForeignMod(ref _foreign_module) => {
                 kind = StructureElementKind::Mod;
             }
-            ItemKind::Ty(ref _typ, ref _type_parameters) => {
+            ItemKind::TyAlias(ref _typ, ref _type_parameters) => {
                 kind = StructureElementKind::TypeAlias;
             }
             ItemKind::Enum(ref _enum_definition, ref _type_parameters) => {
@@ -293,12 +289,12 @@ impl<'v> Visitor<'v> for StructureVisitor<'v> {
         walk_enum_def(self, enum_def, generics, nodeid)
     }
 
-    fn visit_variant(&mut self, v: &'v Variant, g: &'v Generics, nodeid: NodeId) {
+    fn visit_variant(&mut self, v: &'v Variant) {
         // This element is covered by an enum_def call
-        walk_variant(self, v, g, nodeid);
+        walk_variant(self, v);
     }
 
-    fn visit_variant_data(&mut self, s: &'v VariantData, ident: Ident, _: &'v Generics, _: NodeId, span: Span) {
+    fn visit_variant_data(&mut self, s: &'v VariantData) {
         let mut kind = StructureElementKind::EnumVariant;
         if self.parentIsStruct {
             kind = StructureElementKind::Struct;
@@ -308,10 +304,16 @@ impl<'v> Visitor<'v> for StructureVisitor<'v> {
             kind = StructureElementKind::Union;
             self.parentIsUnion = false;
         }
-
-        self.write_element_TODO(ident, kind, span, |_self: &mut Self| {
-            walk_struct_def(_self, s);
-        });
+        match s {
+            VariantData::Struct(fields, _) | VariantData::Tuple(fields, _) => {
+                for field in fields {
+                    self.write_element_TODO(field.ident.unwrap_or(Ident::invalid()), kind, field.span, |_self: &mut Self| {
+                        walk_struct_def(_self, s);
+                    });
+                }
+            },
+            VariantData::Unit(_) => return,
+        };
     }
 
     fn visit_struct_field(&mut self, sf: &'v StructField) {
@@ -325,7 +327,7 @@ impl<'v> Visitor<'v> for StructureVisitor<'v> {
     fn visit_trait_item(&mut self, ti: &'v TraitItem) {
         let kind;
 
-        match ti.node {
+        match ti.kind {
             TraitItemKind::Const(ref _ty, ref _default) => {
                 kind = StructureElementKind::Var;
             }
@@ -352,19 +354,19 @@ impl<'v> Visitor<'v> for StructureVisitor<'v> {
     fn visit_impl_item(&mut self, ii: &'v ImplItem) {
         let kind;
 
-        match ii.node {
+        match ii.kind {
             ImplItemKind::Const(ref _ty, ref _default) => {
                 kind = StructureElementKind::Var;
             }
-            ImplItemKind::Type(ref _type) => {
+            ImplItemKind::TyAlias(ref _type) => {
                 kind = StructureElementKind::TypeAlias;
             }
             ImplItemKind::Method(_, _) | ImplItemKind::Macro(_) => {
                 walk_impl_item(self, ii);
                 return;
             }
-            ImplItemKind::Existential(_) => {
-                kind = StructureElementKind::Existential;
+            ImplItemKind::OpaqueTy(_) => {
+                kind = StructureElementKind::OpaqueTy;
             }
         }
 
@@ -398,7 +400,7 @@ impl<'v> Visitor<'v> for StructureVisitor<'v> {
     fn visit_foreign_item(&mut self, foreign_item: &'v ForeignItem) {
         let kind;
 
-        match foreign_item.node {
+        match foreign_item.kind {
             ForeignItemKind::Fn(ref _function_declaration, ref _generics) => {
                 kind = StructureElementKind::Function;
             }
@@ -455,7 +457,7 @@ impl<'v> Visitor<'v> for StructureVisitor<'v> {
     fn visit_generics(&mut self, g: &'v Generics) {
         walk_generics(self, g)
     }
-    fn visit_mac(&mut self, mac: &Mac) {
+    fn visit_mac(&mut self, mac: &'v Mac) {
         walk_mac(self, mac)
     }
     fn visit_path(&mut self, path: &'v Path, _id: NodeId) {
@@ -463,9 +465,6 @@ impl<'v> Visitor<'v> for StructureVisitor<'v> {
     }
     fn visit_path_segment(&mut self, path_span: Span, path_segment: &'v PathSegment) {
         walk_path_segment(self, path_span, path_segment)
-    }
-    fn visit_assoc_type_binding(&mut self, type_binding: &'v TypeBinding) {
-        walk_assoc_type_binding(self, type_binding)
     }
     fn visit_attribute(&mut self, _attr: &Attribute) {}
     fn visit_vis(&mut self, vis: &'v Visibility) {
@@ -475,11 +474,12 @@ impl<'v> Visitor<'v> for StructureVisitor<'v> {
 
 #[test]
 fn tests_describe_structure() {
-    use parse_describe;
     use std::cell::RefCell;
     use std::rc::Rc;
-    use token_writer::TokenWriter;
-    use util::tests::*;
+    
+    use crate::parse_describe;
+    use crate::token_writer::TokenWriter;
+    use crate::util::tests::*;
 
     fn test_describe_structure(source: &str, expected: &str) {
         let stringRc = Rc::new(RefCell::new(String::new()));

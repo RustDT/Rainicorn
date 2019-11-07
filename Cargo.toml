@@ -1,12 +1,14 @@
 [package]
 name = "rainicorn"
-version = "2.0.0"
+version = "3.0.0"
 autobins = false
+edition = "2018"
 
 [dependencies]
-syntex_errors = { git = "https://github.com/snuk182/syntex" }
-syntex_syntax = { git = "https://github.com/snuk182/syntex" }
-syntex_pos = { git = "https://github.com/snuk182/syntex" }
+rustc_errors = { git = "https://github.com/snuk182/rustc-syntax-tools" }
+rustc_data_structures = { git = "https://github.com/snuk182/rustc-syntax-tools" }
+syntax = { git = "https://github.com/snuk182/rustc-syntax-tools" }
+syntax_pos = { git = "https://github.com/snuk182/rustc-syntax-tools" }
 rustdt_util ="0.2.3"
 
 [[bin]]

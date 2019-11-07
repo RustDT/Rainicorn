@@ -12,23 +12,26 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use source_model::*;
-use util::core::*;
-use util::string::*;
+use crate::token_writer::TokenWriter;
+use crate::source_model::*;
 
-use syntex_errors::emitter;
-use syntex_errors::{DiagnosticBuilder, Handler, Level, DiagnosticId};
-use syntex_syntax::codemap::{self, CodeMap, FilePathMapping, MultiSpan};
-use syntex_syntax::parse::{self, ParseSess};
-use syntex_syntax::syntax::ast;
-use syntex_syntax::tokenstream::TokenStream;
-use syntex_syntax::visit;
-use syntex_pos::FileName;
+use crate::util::core::*;
+use crate::util::string::*;
+
+use crate::syntex_errors::emitter;
+use crate::syntex_errors::{SourceMapperDyn, Diagnostic, Handler, Level, DiagnosticId};
+use crate::syntex_syntax::source_map::{self, SourceMap, FilePathMapping, MultiSpan};
+use crate::syntex_syntax::parse;
+use crate::syntex_syntax::sess::ParseSess;
+use crate::syntex_syntax::ast;
+use crate::syntex_syntax::edition;
+use crate::syntex_syntax::tokenstream::TokenStream;
+use crate::syntex_syntax::visit;
+use crate::syntex_pos::FileName;
+use crate::rustc_data_structures::sync::Lrc;
 
 use std::boxed::Box;
 use std::path::Path;
-
-use token_writer::TokenWriter;
 
 use std::cell::RefCell;
 use std::env;
@@ -50,7 +53,7 @@ pub fn parse_analysis<T: fmt::Write + 'static>(source: &str, out: T) -> GResult<
     let (messages, elements) = parse_crate_with_messages(source);
 
     let outRc = Rc::new(RefCell::new(out));
-    try!(write_parse_analysis_do(messages, elements, outRc.clone()));
+    write_parse_analysis_do(messages, elements, outRc.clone())?;
     let res = unwrap_Rc_RefCell(outRc);
     return Ok(res);
 }
@@ -61,10 +64,12 @@ use std::thread;
 pub fn parse_crate_with_messages(source: &str) -> (Vec<SourceMessage>, Vec<StructureElement>) {
     let messages = Arc::new(Mutex::new(vec![]));
     let elements = {
+		use crate::syntex_syntax::with_globals;
+		
         let source = String::from(source);
         let messages = messages.clone();
 
-        let worker_thread = thread::Builder::new().name("parser_thread".to_string()).spawn(move || ::syntex_syntax::with_globals(|| parse_crate_with_messages_do(&source, messages))).unwrap();
+        let worker_thread = thread::Builder::new().name("parser_thread".to_string()).spawn(move || with_globals(edition::DEFAULT_EDITION, || parse_crate_with_messages_do(&source, messages))).unwrap();
 
         worker_thread.join().unwrap_or(vec![])
     };
@@ -76,12 +81,12 @@ pub fn parse_crate_with_messages(source: &str) -> (Vec<SourceMessage>, Vec<Struc
 }
 
 pub fn parse_crate_with_messages_do(source: &str, messages: Arc<Mutex<Vec<SourceMessage>>>) -> Vec<StructureElement> {
-    use structure_visitor::StructureVisitor;
+    use crate::structure_visitor::StructureVisitor;
 
     let mut elements = vec![];
 
     let fileLoader = Box::new(DummyFileLoader::new());
-    let codemap = Rc::new(CodeMap::with_file_loader(fileLoader, FilePathMapping::empty()));
+    let codemap = Rc::new(SourceMap::with_file_loader(fileLoader, FilePathMapping::empty()));
 
     let krate = parse_crate(source, codemap.clone(), messages.clone());
 
@@ -109,7 +114,7 @@ impl DummyFileLoader {
     }
 }
 
-impl codemap::FileLoader for DummyFileLoader {
+impl source_map::FileLoader for DummyFileLoader {
     fn file_exists(&self, path: &Path) -> bool {
         return path.file_name() == Some(self.modName);
     }
@@ -128,14 +133,14 @@ impl codemap::FileLoader for DummyFileLoader {
 }
 
 struct MessagesHandler {
-    codemap: Rc<CodeMap>,
+    codemap: Rc<SourceMapperDyn>,
     messages: Arc<Mutex<Vec<SourceMessage>>>,
 }
 
-fn parse_crate<'a>(source: &str, codemap: Rc<CodeMap>, messages: Arc<Mutex<Vec<SourceMessage>>>) -> Option<ast::Crate> {
+fn parse_crate<'a>(source: &str, codemap: Rc<SourceMap>, messages: Arc<Mutex<Vec<SourceMessage>>>) -> Option<ast::Crate> {
     let emitter = MessagesHandler::new(codemap.clone(), messages.clone());
 
-    let handler = Handler::with_emitter(true, false, Box::new(emitter));
+    let handler = Handler::with_emitter(true, None, Box::new(emitter));
     let sess = ParseSess::with_span_handler(handler, codemap.clone());
 
     let krate_result = parse_crate_do(source, &sess);
@@ -150,6 +155,8 @@ fn parse_crate<'a>(source: &str, codemap: Rc<CodeMap>, messages: Arc<Mutex<Vec<S
 }
 
 pub fn parse_crate_do<'a>(source: &str, sess: &'a ParseSess) -> parse::PResult<'a, ast::Crate> {
+    use std::iter::FromIterator;
+    
     let source = source.to_string();
     let name = "_file_module_".to_string();
     
@@ -158,12 +165,12 @@ pub fn parse_crate_do<'a>(source: &str, sess: &'a ParseSess) -> parse::PResult<'
         p1.parse_all_token_trees()?.into_iter().map(|tt| tt.into()).collect::<Vec<_>>()
     };
 
-    let mut parser = parse::parser::Parser::new(sess, TokenStream::concat(tts), None, false, false);
+    let mut parser = parse::parser::Parser::new(sess, TokenStream::from_iter(tts), None, true, false, None);
     parser.parse_crate_mod()
 }
 
 impl MessagesHandler {
-    fn new(codemap: Rc<CodeMap>, messages: Arc<Mutex<Vec<SourceMessage>>>) -> MessagesHandler {
+    fn new(codemap: Rc<SourceMapperDyn>, messages: Arc<Mutex<Vec<SourceMessage>>>) -> MessagesHandler {
         MessagesHandler { codemap: codemap, messages: messages }
     }
 
@@ -180,7 +187,7 @@ impl MessagesHandler {
 }
 
 impl emitter::Emitter for MessagesHandler {
-    fn emit(&mut self, db: &DiagnosticBuilder) {
+    fn emit_diagnostic(&mut self, db: &Diagnostic) {
         let msg = db.message();
         let msg = msg.as_str();
         let code: Option<&String> = db.code.as_ref().map(|c| match c  {
@@ -196,17 +203,20 @@ impl emitter::Emitter for MessagesHandler {
             panic!("What is code: Option<&str>??");
         }
 
-        let sourceranges: Vec<_> = multispan.primary_spans().iter().map(|span| -> SourceRange { SourceRange::new(&self.codemap, *span) }).collect();
+        let sourceranges: Vec<_> = multispan.primary_spans().iter().map(|span| -> SourceRange { SourceRange::new(self.codemap.as_ref(), *span) }).collect();
 
         for sourcerange in sourceranges {
             self.write_message_handled(Some(sourcerange), msg, level_to_status_level(lvl));
         }
     }
+    
+    fn source_map(&self) -> Option<&Lrc<SourceMapperDyn>> {
+        Some(&self.codemap)
+    }
 }
 
 fn level_to_status_level(lvl: Level) -> Severity {
     match lvl {
-        Level::PhaseFatal => panic!("Level::PhaseFatal"),
         Level::Bug => panic!("Level::BUG"),
         Level::Cancelled => panic!("Level::CANCELLED"),
         Level::Help | Level::Note => Severity::INFO,
@@ -219,124 +229,124 @@ impl MessagesHandler {}
 
 /* ----------------- describe writting ----------------- */
 
-pub fn write_parse_analysis_do(messages: Vec<SourceMessage>, elements: Vec<StructureElement>, out: Rc<RefCell<fmt::Write>>) -> Void {
+pub fn write_parse_analysis_do(messages: Vec<SourceMessage>, elements: Vec<StructureElement>, out: Rc<RefCell<dyn fmt::Write>>) -> Void {
     let mut tokenWriter = TokenWriter { out: out };
 
-    try!(tokenWriter.write_raw("RUST_PARSE_DESCRIBE 1.0 {\n"));
-    try!(write_parse_analysis_contents(messages, elements, &mut tokenWriter));
-    try!(tokenWriter.write_raw("\n}"));
+    tokenWriter.write_raw("RUST_PARSE_DESCRIBE 1.0 {\n")?;
+    write_parse_analysis_contents(messages, elements, &mut tokenWriter)?;
+    tokenWriter.write_raw("\n}")?;
 
     Ok(())
 }
 
 pub fn write_parse_analysis_contents(messages: Vec<SourceMessage>, elements: Vec<StructureElement>, tokenWriter: &mut TokenWriter) -> Void {
-    try!(tokenWriter.write_raw("MESSAGES {\n"));
+    tokenWriter.write_raw("MESSAGES {\n")?;
     for msg in messages {
-        try!(output_message(tokenWriter, msg.sourcerange, &msg.message, &msg.severity));
+        output_message(tokenWriter, msg.sourcerange, &msg.message, &msg.severity)?;
     }
-    try!(tokenWriter.write_raw("}\n"));
+    tokenWriter.write_raw("}\n")?;
 
     for element in elements {
-        try!(write_structure_element(tokenWriter, &element, 0));
+        write_structure_element(tokenWriter, &element, 0)?;
     }
 
     Ok(())
 }
 
 fn output_message(tokenWriter: &mut TokenWriter, opt_sr: Option<SourceRange>, msg: &str, lvl: &Severity) -> Void {
-    try!(tokenWriter.write_raw("{ "));
+    tokenWriter.write_raw("{ ")?;
 
-    try!(output_Level(&lvl, tokenWriter));
+    output_Level(&lvl, tokenWriter)?;
 
-    try!(output_opt_SourceRange(&opt_sr, tokenWriter));
+    output_opt_SourceRange(&opt_sr, tokenWriter)?;
 
-    try!(tokenWriter.write_string_token(msg));
+    tokenWriter.write_string_token(msg)?;
 
-    try!(tokenWriter.write_raw("}\n"));
+    tokenWriter.write_raw("}\n")?;
 
     Ok(())
 }
 
 pub fn output_Level(lvl: &Severity, writer: &mut TokenWriter) -> Void {
-    try!(writer.write_raw_token(lvl.to_string()));
+    writer.write_raw_token(lvl.to_string())?;
 
     Ok(())
 }
 
 pub fn output_SourceRange(sr: &SourceRange, tw: &mut TokenWriter) -> Void {
-    try!(tw.write_raw("{ "));
+    tw.write_raw("{ ")?;
     {
         let mut out = tw.get_output();
-        try!(out.write_fmt(format_args!("{}:{} {}:{} ", sr.start_pos.line - 1, sr.start_pos.col.0, sr.end_pos.line - 1, sr.end_pos.col.0,)));
+        out.write_fmt(format_args!("{}:{} {}:{} ", sr.start_pos.line - 1, sr.start_pos.col.0, sr.end_pos.line - 1, sr.end_pos.col.0,))?;
     }
-    try!(tw.write_raw("}"));
+    tw.write_raw("}")?;
 
     Ok(())
 }
 
 pub fn output_opt_SourceRange(sr: &Option<SourceRange>, writer: &mut TokenWriter) -> Void {
     match sr {
-        &None => try!(writer.write_raw("{ }")),
-        &Some(ref sr) => try!(output_SourceRange(sr, writer)),
+        &None => writer.write_raw("{ }")?,
+        &Some(ref sr) => output_SourceRange(sr, writer)?,
     }
 
-    try!(writer.write_raw(" "));
+    writer.write_raw(" ")?;
 
     Ok(())
 }
 
 pub fn write_indent(tokenWriter: &mut TokenWriter, level: u32) -> Void {
-    try!(writeNTimes(&mut *tokenWriter.get_output(), ' ', level * 2));
+    writeNTimes(&mut *tokenWriter.get_output(), ' ', level * 2)?;
     Ok(())
 }
 
 pub fn write_structure_element(tw: &mut TokenWriter, element: &StructureElement, level: u32) -> Void {
-    try!(tw.write_raw_token(element.kind.to_string()));
+    tw.write_raw_token(element.kind.to_string())?;
 
-    try!(tw.write_raw("{ "));
+    tw.write_raw("{ ")?;
 
-    try!(tw.write_string_token(&element.name));
+    tw.write_string_token(&element.name)?;
 
-    try!(output_SourceRange(&element.sourcerange, tw));
+    output_SourceRange(&element.sourcerange, tw)?;
 
-    try!(tw.get_output().write_str(" {}")); // name source range, Not Supported
+    tw.get_output().write_str(" {}")?; // name source range, Not Supported
 
-    try!(tw.get_output().write_str(" "));
-    try!(tw.write_string_token(&element.type_desc));
+    tw.get_output().write_str(" ")?;
+    tw.write_string_token(&element.type_desc)?;
 
-    try!(tw.get_output().write_str("{}")); // attribs, Not Supported
+    tw.get_output().write_str("{}")?; // attribs, Not Supported
 
     if element.children.is_empty() {
-        try!(tw.get_output().write_str(" "));
+        tw.get_output().write_str(" ")?;
     } else {
         let level = level + 1;
 
         for child in &element.children {
-            try!(tw.get_output().write_str("\n"));
-            try!(write_indent(tw, level));
-            try!(write_structure_element(tw, child, level));
+            tw.get_output().write_str("\n")?;
+            write_indent(tw, level)?;
+            write_structure_element(tw, child, level)?;
         }
 
-        try!(tw.get_output().write_str("\n"));
-        try!(write_indent(tw, level - 1));
+        tw.get_output().write_str("\n")?;
+        write_indent(tw, level - 1)?;
     }
 
-    try!(tw.get_output().write_str("}"));
+    tw.get_output().write_str("}")?;
 
     Ok(())
 }
 
 #[cfg(test)]
 mod parse_describe_tests {
-
-    use parse_describe::*;
-    use source_model::*;
     use std::cell::RefCell;
     use std::rc::Rc;
-    use token_writer::TokenWriter;
-    use util;
-    use util::core::*;
-    use util::tests::check_equal;
+   
+    use crate::parse_describe::*;
+    use crate::source_model::*;
+    use crate::token_writer::TokenWriter;
+    use crate::util;
+    use crate::util::core::*;
+    use crate::util::tests::check_equal;
 
     fn test_write_structure_element(name: &str, kind: StructureElementKind, sr: SourceRange, type_desc: String, expected: &str) {
         let stringRc = Rc::new(RefCell::new(String::new()));

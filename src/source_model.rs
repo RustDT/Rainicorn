@@ -12,7 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use syntex_syntax::codemap::{CharPos, CodeMap, Loc, Span};
+use crate::syntex_syntax::source_map::{CharPos, Loc, Span};
+use crate::syntex_errors::{SourceMapperDyn};
 
 #[derive(Debug, Clone, Copy)]
 pub struct LineColumnPosition {
@@ -29,7 +30,7 @@ pub struct SourceRange {
 }
 
 impl SourceRange {
-    pub fn new(codemap: &CodeMap, span: Span) -> SourceRange {
+    pub fn new(codemap: &SourceMapperDyn, span: Span) -> SourceRange {
         let startLoc = codemap.lookup_char_pos(span.lo());
         let endLoc = codemap.lookup_char_pos(span.hi());
 
@@ -79,6 +80,7 @@ pub struct SourceMessage {
 
 /* ----------------- Model ----------------- */
 
+#[derive(Clone, Copy, Eq, PartialEq)]
 pub enum StructureElementKind {
     Var,
     Function,
@@ -92,7 +94,7 @@ pub enum StructureElementKind {
     Mod,
     Use,
     MacroDef, 
-    Existential,
+    OpaqueTy,
     TraitAlias,
     TypeAlias,
 }
@@ -113,7 +115,7 @@ impl StructureElementKind {
             StructureElementKind::Use => "Use",
             StructureElementKind::MacroDef => "Macro",
             StructureElementKind::TypeAlias => "TypeAlias",
-            StructureElementKind::Existential => "Existential",
+            StructureElementKind::OpaqueTy => "OpaqueTy",
             StructureElementKind::TraitAlias => "TraitAlias",
         }
     }
