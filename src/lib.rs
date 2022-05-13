@@ -1,10 +1,14 @@
 #![allow(non_snake_case)]
 
 use rustdt_util as util;
-use rustc_errors as syntex_errors;
+use rustc_errors;
 use rustc_data_structures;
-use syntax as syntex_syntax;
-use syntax_pos as syntex_pos;
+use rustc_span;
+use rustc_error_messages;
+use rustc_session;
+use rustc_ast;
+use rustc_ast_pretty;
+use rustc_parse;
 
 pub mod parse_describe;
 pub mod source_model;

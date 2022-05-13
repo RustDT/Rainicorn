@@ -12,8 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::syntex_syntax::source_map::{CharPos, Loc, Span};
-use crate::syntex_errors::{SourceMapperDyn};
+use crate::rustc_span::source_map::{CharPos, Loc, Span, SourceMap};
 
 #[derive(Debug, Clone, Copy)]
 pub struct LineColumnPosition {
@@ -30,7 +29,7 @@ pub struct SourceRange {
 }
 
 impl SourceRange {
-    pub fn new(codemap: &SourceMapperDyn, span: Span) -> SourceRange {
+    pub fn new(codemap: &SourceMap, span: Span) -> SourceRange {
         let startLoc = codemap.lookup_char_pos(span.lo());
         let endLoc = codemap.lookup_char_pos(span.hi());
 

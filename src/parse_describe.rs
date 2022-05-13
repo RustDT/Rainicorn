@@ -18,27 +18,25 @@ use crate::source_model::*;
 use crate::util::core::*;
 use crate::util::string::*;
 
-use crate::syntex_errors::emitter;
-use crate::syntex_errors::{SourceMapperDyn, Diagnostic, Handler, Level, DiagnosticId};
-use crate::syntex_syntax::source_map::{self, SourceMap, FilePathMapping, MultiSpan};
-use crate::syntex_syntax::parse;
-use crate::syntex_syntax::sess::ParseSess;
-use crate::syntex_syntax::ast;
-use crate::syntex_syntax::edition;
-use crate::syntex_syntax::tokenstream::TokenStream;
-use crate::syntex_syntax::visit;
-use crate::syntex_pos::FileName;
+use crate::rustc_errors::emitter;
+use crate::rustc_errors::{Diagnostic, Handler, Level, DiagnosticId, PResult, DiagnosticMessage, FluentBundle, LazyFallbackBundle, DEFAULT_LOCALE_RESOURCES, fallback_fluent_bundle};
+use crate::rustc_span::source_map::{self, SourceMap, FilePathMapping, FileName};
+use crate::rustc_error_messages::MultiSpan;
+use crate::rustc_session::parse::{ParseSess};
+use crate::rustc_parse as parse;
+use crate::rustc_ast::ast;
+use crate::rustc_span::{SourceFileHashAlgorithm, RealFileName};
+use crate::rustc_ast::tokenstream::TokenStream;
+use crate::rustc_ast::visit;
 use crate::rustc_data_structures::sync::Lrc;
 
 use std::boxed::Box;
 use std::path::Path;
 
 use std::cell::RefCell;
-use std::env;
 use std::fmt;
 use std::io;
 use std::io::Write;
-use std::path::PathBuf;
 use std::rc::*;
 
 /* -----------------  ----------------- */
@@ -64,12 +62,10 @@ use std::thread;
 pub fn parse_crate_with_messages(source: &str) -> (Vec<SourceMessage>, Vec<StructureElement>) {
     let messages = Arc::new(Mutex::new(vec![]));
     let elements = {
-		use crate::syntex_syntax::with_globals;
-		
-        let source = String::from(source);
+		let source = String::from(source);
         let messages = messages.clone();
 
-        let worker_thread = thread::Builder::new().name("parser_thread".to_string()).spawn(move || with_globals(edition::DEFAULT_EDITION, || parse_crate_with_messages_do(&source, messages))).unwrap();
+        let worker_thread = thread::Builder::new().name("parser_thread".to_string()).spawn(move || parse_crate_with_messages_do(&source, messages)).unwrap();
 
         worker_thread.join().unwrap_or(vec![])
     };
@@ -86,7 +82,7 @@ pub fn parse_crate_with_messages_do(source: &str, messages: Arc<Mutex<Vec<Source
     let mut elements = vec![];
 
     let fileLoader = Box::new(DummyFileLoader::new());
-    let codemap = Rc::new(SourceMap::with_file_loader(fileLoader, FilePathMapping::empty()));
+    let codemap = Rc::new(SourceMap::with_file_loader_and_hash_kind(fileLoader, FilePathMapping::empty(), SourceFileHashAlgorithm::Md5));
 
     let krate = parse_crate(source, codemap.clone(), messages.clone());
 
@@ -119,22 +115,15 @@ impl source_map::FileLoader for DummyFileLoader {
         return path.file_name() == Some(self.modName);
     }
 
-    fn abs_path(&self, path: &Path) -> Option<PathBuf> {
-        if path.is_absolute() {
-            Some(path.to_path_buf())
-        } else {
-            env::current_dir().ok().map(|cwd| cwd.join(path))
-        }
-    }
-
     fn read_file(&self, _path: &Path) -> io::Result<String> {
         Ok(String::new())
     }
 }
 
 struct MessagesHandler {
-    codemap: Rc<SourceMapperDyn>,
+    codemap: Rc<SourceMap>,
     messages: Arc<Mutex<Vec<SourceMessage>>>,
+    fallback_fluent_bundle: LazyFallbackBundle,
 }
 
 fn parse_crate<'a>(source: &str, codemap: Rc<SourceMap>, messages: Arc<Mutex<Vec<SourceMessage>>>) -> Option<ast::Crate> {
@@ -154,24 +143,24 @@ fn parse_crate<'a>(source: &str, codemap: Rc<SourceMap>, messages: Arc<Mutex<Vec
     };
 }
 
-pub fn parse_crate_do<'a>(source: &str, sess: &'a ParseSess) -> parse::PResult<'a, ast::Crate> {
+pub fn parse_crate_do<'a>(source: &str, sess: &'a ParseSess) -> PResult<'a, ast::Crate> {
     use std::iter::FromIterator;
     
     let source = source.to_string();
     let name = "_file_module_".to_string();
     
     let tts = {
-        let mut p1 = parse::new_parser_from_source_str(sess, FileName::Real(name.into()), source);
+        let mut p1 = parse::new_parser_from_source_str(sess, FileName::Real(RealFileName::LocalPath(name.into())), source);
         p1.parse_all_token_trees()?.into_iter().map(|tt| tt.into()).collect::<Vec<_>>()
     };
 
-    let mut parser = parse::parser::Parser::new(sess, TokenStream::from_iter(tts), None, true, false, None);
+    let mut parser = parse::parser::Parser::new(sess, TokenStream::from_iter(tts), true, None);
     parser.parse_crate_mod()
 }
 
 impl MessagesHandler {
-    fn new(codemap: Rc<SourceMapperDyn>, messages: Arc<Mutex<Vec<SourceMessage>>>) -> MessagesHandler {
-        MessagesHandler { codemap: codemap, messages: messages }
+    fn new(codemap: Rc<SourceMap>, messages: Arc<Mutex<Vec<SourceMessage>>>) -> MessagesHandler {
+        MessagesHandler { codemap: codemap, messages: messages, fallback_fluent_bundle: fallback_fluent_bundle(DEFAULT_LOCALE_RESOURCES, false) }
     }
 
     fn write_message_handled(&mut self, sourcerange: Option<SourceRange>, msg: &str, severity: Severity) {
@@ -188,40 +177,50 @@ impl MessagesHandler {
 
 impl emitter::Emitter for MessagesHandler {
     fn emit_diagnostic(&mut self, db: &Diagnostic) {
-        let msg = db.message();
-        let msg = msg.as_str();
-        let code: Option<&String> = db.code.as_ref().map(|c| match c  {
-            DiagnosticId::Error(ref str) => str,
-            DiagnosticId::Lint(ref str) => str,
-        });
-        let lvl: Level = db.level;
-
-        let multispan: &MultiSpan = &db.span;
-
-        if let Some(code) = code {
-            io::stderr().write_fmt(format_args!("Code: {}\n", code)).unwrap();
-            panic!("What is code: Option<&str>??");
-        }
-
-        let sourceranges: Vec<_> = multispan.primary_spans().iter().map(|span| -> SourceRange { SourceRange::new(self.codemap.as_ref(), *span) }).collect();
-
-        for sourcerange in sourceranges {
-            self.write_message_handled(Some(sourcerange), msg, level_to_status_level(lvl));
-        }
+        for ref msg in db.message.as_slice() {
+        	let msg = match &msg.0 {
+	        	DiagnosticMessage::Str(ref str) => str.clone(),
+	        	DiagnosticMessage::FluentIdentifier(id, _) => format!("FluentID: {}", id),
+        	};
+	        let code: Option<&String> = db.code.as_ref().map(|c| match c  {
+	            DiagnosticId::Error(ref str) => str,
+	            DiagnosticId::Lint {ref name, ..} => name,
+	        });
+	        let lvl: Level = db.level();
+	
+	        let multispan: &MultiSpan = &db.span;
+	
+	        if let Some(code) = code {
+	            io::stderr().write_fmt(format_args!("Code: {}\n", code)).unwrap();
+	            panic!("What is code: Option<&str>??");
+	        }
+	
+	        let sourceranges: Vec<_> = multispan.primary_spans().iter().map(|span| -> SourceRange { SourceRange::new(self.codemap.as_ref(), *span) }).collect();
+	
+	        for sourcerange in sourceranges {
+	            self.write_message_handled(Some(sourcerange), msg.as_str(), level_to_status_level(lvl));
+	        }
+        } 
     }
-    
-    fn source_map(&self) -> Option<&Lrc<SourceMapperDyn>> {
+
+    fn fluent_bundle(&self) -> Option<&Lrc<FluentBundle>> { None }
+
+    fn fallback_fluent_bundle(&self) -> &FluentBundle {
+	    &**self.fallback_fluent_bundle
+    } 
+
+    fn source_map(&self) -> Option<&Lrc<SourceMap>> {
         Some(&self.codemap)
     }
 }
 
 fn level_to_status_level(lvl: Level) -> Severity {
     match lvl {
-        Level::Bug => panic!("Level::BUG"),
-        Level::Cancelled => panic!("Level::CANCELLED"),
-        Level::Help | Level::Note => Severity::INFO,
-        Level::Warning | Level::FailureNote => Severity::WARNING,
-        Level::Error | Level::Fatal => Severity::ERROR,
+        Level::Bug | Level::DelayedBug => panic!("Level::BUG"),
+        Level::Help | Level::Note | Level::OnceNote | Level::Allow => Severity::INFO,
+        Level::Warning | Level::FailureNote | Level::Expect(_) => Severity::WARNING,
+        Level::Fatal => Severity::ERROR,
+        Level::Error {lint} => if lint {Severity::WARNING} else {Severity::ERROR}
     }
 }
 

@@ -19,9 +19,12 @@
 use crate::source_model::*;
 use crate::util::core::*;
 
-use crate::syntex_syntax::ast::*;
-use crate::syntex_syntax::source_map::{SourceMap, Span};
-use crate::syntex_syntax::visit::*;
+use crate::rustc_ast::ast::*;
+use crate::rustc_span::source_map::{SourceMap, Span};
+use crate::rustc_span::symbol::{Symbol, Ident};
+use crate::rustc_ast::visit::*;
+
+use std::ops::Fn;
 
 pub struct StructureVisitor<'ps> {
     pub codemap: &'ps SourceMap,
@@ -38,6 +41,10 @@ impl<'ps> StructureVisitor<'ps> {
             parentIsUnion: false,
             elements: vec![],
         }
+    }
+
+    fn visit_mac(&mut self, mac: &'ps MacCall) {
+        walk_mac(self, mac)
     }
 
     pub fn write_element_do<FN>(&mut self, ident: &str, kind: StructureElementKind, sourcerange: SourceRange, type_desc: String, walkFn: FN) -> Void
@@ -96,8 +103,8 @@ impl<'ps> StructureVisitor<'ps> {
 
     fn write_ItemUse(&mut self, tree: &UseTree) {
         use std::ops::Index;
-        use crate::syntex_syntax::ast;
-        use crate::syntex_syntax::print::pprust;
+        use crate::rustc_ast::ast;
+        use crate::rustc_ast_pretty::pprust;
 
         let kind = StructureElementKind::Use;
         let mut useSpec = String::new();
@@ -170,7 +177,7 @@ impl<'ps> StructureVisitor<'ps> {
         }
         type_desc.push_str(")");
 
-        if let FunctionRetTy::Ty(ref _ret) = fd.output {
+        if let FnRetTy::Ty(ref _ret) = fd.output {
             if let Ok(ret_snippet) = self.codemap.span_to_snippet(fd.output.span()) {
                 type_desc.push_str(" -> ");
                 type_desc.push_str(&ret_snippet);
@@ -188,19 +195,11 @@ impl<'ps> StructureVisitor<'ps> {
 }
 
 impl<'v> Visitor<'v> for StructureVisitor<'v> {
-    fn visit_name(&mut self, _span: Span, _name: Name) {
+    fn visit_name(&mut self, _span: Span, _name: Symbol) {
         // Nothing to do.
     }
     fn visit_ident(&mut self, ident: Ident) {
         walk_ident(self, ident);
-    }
-
-    fn visit_mod(&mut self, m: &'v Mod, _span: Span, _attrs: &[Attribute], _nodeid: NodeId) {
-        //        let sr = &SourceRange::new(self.codemap, span);
-        //        self.write_element_handled("_file_", StructureElementKind::File, sr, |_self : &mut Self| {
-        //            walk_mod(_self, m);
-        //        })
-        walk_mod(self, m);
     }
 
     fn visit_item(&mut self, item: &'v Item) {
@@ -214,8 +213,9 @@ impl<'v> Visitor<'v> for StructureVisitor<'v> {
         };
 
         match item.kind {
-            ItemKind::OpaqueTy(ref _bounds, ref _generics) => {
-                kind = StructureElementKind::OpaqueTy;
+            ItemKind::GlobalAsm(ref asm) => {
+            	self.visit_inline_asm(asm);
+            	return;
             }
             ItemKind::TraitAlias(ref _generics, ref _bounds) => {
                 kind = StructureElementKind::TraitAlias;
@@ -227,30 +227,30 @@ impl<'v> Visitor<'v> for StructureVisitor<'v> {
                 self.write_ItemUse(vp);
                 return;
             }
-            ItemKind::Static(ref typ, _, ref _expr) | ItemKind::Const(ref typ, ref _expr) => {
+            ItemKind::Static(ref typ, _, ref _expr) | ItemKind::Const(_, ref typ, ref _expr) => {
                 if let Ok(snippet) = self.codemap.span_to_snippet(typ.span) {
                     type_desc.push_str(&snippet);
                 }
                 self.write_element(item.ident, StructureElementKind::Var, item.span, type_desc, noop_walkFn);
                 return;
             }
-            ItemKind::Fn(ref declaration, ref header, ref _generics, ref body) => {
-                self.visit_fn(FnKind::ItemFn(item.ident, header, &item.vis, body), declaration, item.span, item.id);
+            ItemKind::Fn(ref fn1) => {
+            	self.visit_fn(FnKind::Fn(FnCtxt::Free, item.ident, &fn1.sig, &item.vis, &fn1.generics, fn1.body.as_ref().map(|p| &**p)), item.span, item.id);
                 return;
             }
-            ItemKind::Mod(ref _module) => {
+            ItemKind::Mod(_, _) => {
                 kind = StructureElementKind::Mod;
             }
             ItemKind::ForeignMod(ref _foreign_module) => {
                 kind = StructureElementKind::Mod;
             }
-            ItemKind::TyAlias(ref _typ, ref _type_parameters) => {
+            ItemKind::TyAlias(_) => {
                 kind = StructureElementKind::TypeAlias;
             }
             ItemKind::Enum(ref _enum_definition, ref _type_parameters) => {
                 kind = StructureElementKind::Enum;
             }
-            ItemKind::Impl(_, _, ref _type_parameters, _, ref _opt_trait_reference, ref _typ, ref _impl_items) => {
+            ItemKind::Impl(_) => {
                 kind = StructureElementKind::Impl;
             }
             ItemKind::Struct(ref _struct_definition, ref _generics) => {
@@ -264,15 +264,11 @@ impl<'v> Visitor<'v> for StructureVisitor<'v> {
                 walk_item(self, item);
                 return;
             }
-            ItemKind::Trait(_, _, ref _generics, ref _bounds, ref _methods) => {
+            ItemKind::Trait(_) => {
                 kind = StructureElementKind::Trait;
             }
-            ItemKind::Mac(ref mac) => {
+            ItemKind::MacCall(ref mac) => {
                 self.visit_mac(mac);
-                return;
-            }
-            ItemKind::GlobalAsm(ref asm) => {
-                self.visit_global_asm(asm);
                 return;
             }
             ItemKind::MacroDef(ref macro_def) => {
@@ -307,7 +303,7 @@ impl<'v> Visitor<'v> for StructureVisitor<'v> {
         match s {
             VariantData::Struct(fields, _) | VariantData::Tuple(fields, _) => {
                 for field in fields {
-                    self.write_element_TODO(field.ident.unwrap_or(Ident::invalid()), kind, field.span, |_self: &mut Self| {
+                    self.write_element_TODO(field.ident.unwrap_or(Ident::empty()), kind, field.span, |_self: &mut Self| {
                         walk_struct_def(_self, s);
                     });
                 }
@@ -316,84 +312,22 @@ impl<'v> Visitor<'v> for StructureVisitor<'v> {
         };
     }
 
-    fn visit_struct_field(&mut self, sf: &'v StructField) {
-        if let Some(ident) = sf.ident {
-            self.write_element_TODO(ident, StructureElementKind::Var, sf.span, |_self: &mut Self| {
-                walk_struct_field(_self, sf);
-            });
-        }
-    }
-
-    fn visit_trait_item(&mut self, ti: &'v TraitItem) {
-        let kind;
-
-        match ti.kind {
-            TraitItemKind::Const(ref _ty, ref _default) => {
-                kind = StructureElementKind::Var;
-            }
-            TraitItemKind::Method(ref sig, _) => {
-                self.write_function_element(ti.ident, ti.span, &sig.decl, &|_self: &mut Self| {
-                    walk_trait_item(_self, ti);
-                });
-                return;
-            }
-            TraitItemKind::Type(ref _bounds, ref _default) => {
-                kind = StructureElementKind::TypeAlias;
-            }
-            TraitItemKind::Macro(ref mac) => {
-                self.visit_mac(mac);
-                return;
-            }
-        }
-
-        self.write_element_TODO(ti.ident, kind, ti.span, |_self: &mut Self| {
-            walk_trait_item(_self, ti);
-        });
-    }
-
-    fn visit_impl_item(&mut self, ii: &'v ImplItem) {
-        let kind;
-
-        match ii.kind {
-            ImplItemKind::Const(ref _ty, ref _default) => {
-                kind = StructureElementKind::Var;
-            }
-            ImplItemKind::TyAlias(ref _type) => {
-                kind = StructureElementKind::TypeAlias;
-            }
-            ImplItemKind::Method(_, _) | ImplItemKind::Macro(_) => {
-                walk_impl_item(self, ii);
-                return;
-            }
-            ImplItemKind::OpaqueTy(_) => {
-                kind = StructureElementKind::OpaqueTy;
-            }
-        }
-
-        self.write_element_TODO(ii.ident, kind, ii.span, |_self: &mut Self| {
-            walk_impl_item(_self, ii);
-        });
-    }
-
     /* ----------------- Function ----------------- */
 
-    fn visit_fn(&mut self, fk: FnKind<'v>, fd: &'v FnDecl, span: Span, _nodeid: NodeId) {
+    fn visit_fn(&mut self, fk: FnKind<'v>, span: Span, _nodeid: NodeId) {
         let ident: Ident;
 
         match fk {
-            FnKind::Method(_ident, ref _MethodSig, _option, _b) => {
-                ident = _ident;
+            FnKind::Fn(_, ident1, ref _MethodSig, _option, _b, _) => {
+                ident = ident1;
             }
-            FnKind::ItemFn(_ident, FnHeader { asyncness: _Asyncness, unsafety: _Unsafety, constness: _Constness, abi: _Abi }, _Visibility, _b) => {
-                ident = _ident;
-            }
-            FnKind::Closure(_) => {
+            FnKind::Closure(_, _) => {
                 return;
             }
         };
 
-        self.write_function_element(ident, span, fd, &|_self: &mut Self| {
-            walk_fn(_self, fk, fd, span);
+        self.write_function_element(ident, span, fk.decl(), &|_self: &mut Self| {
+            walk_fn(_self, fk, span);
         });
     }
 
@@ -401,16 +335,16 @@ impl<'v> Visitor<'v> for StructureVisitor<'v> {
         let kind;
 
         match foreign_item.kind {
-            ForeignItemKind::Fn(ref _function_declaration, ref _generics) => {
+            ForeignItemKind::Fn(_) => {
                 kind = StructureElementKind::Function;
             }
-            ForeignItemKind::Static(ref _typ, _) => {
+            ForeignItemKind::Static(ref _typ, _, _) => {
                 kind = StructureElementKind::Var;
             }
-            ForeignItemKind::Ty => {
+            ForeignItemKind::TyAlias(_) => {
                 kind = StructureElementKind::TypeAlias;
             }
-            ForeignItemKind::Macro(_) => {
+            ForeignItemKind::MacCall(_) => {
                 kind = StructureElementKind::MacroDef;
             }
         }
@@ -456,9 +390,6 @@ impl<'v> Visitor<'v> for StructureVisitor<'v> {
     }
     fn visit_generics(&mut self, g: &'v Generics) {
         walk_generics(self, g)
-    }
-    fn visit_mac(&mut self, mac: &'v Mac) {
-        walk_mac(self, mac)
     }
     fn visit_path(&mut self, path: &'v Path, _id: NodeId) {
         walk_path(self, path)
